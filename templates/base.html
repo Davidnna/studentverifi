@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#1d4ed8">
-  <meta name="description" content="StudentVerifi — QR-code-based student identity verification for Ebonyi State University.">
+  <meta name="description" content="StudentVerifi — information about QR-code-based student identity verification at Ebonyi State University.">
   <title>{% block title %}StudentVerifi · EBSU{% endblock %}</title>
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="preload" href="{{ url_for('static', filename='logo.svg') }}" as="image" type="image/svg+xml">
@@ -17,7 +17,11 @@
   <a class="brand" href="{{ url_for('index') }}" aria-label="StudentVerifi home — Ebonyi State University">
     <img src="{{ url_for('static', filename='logo.svg') }}" alt="StudentVerifi — EBSU Identity Verification" width="260" height="60">
   </a>
-  <nav aria-label="Main navigation">
+  <nav aria-label="Main navigation" class="public-nav">
+    <a href="{{ url_for('about') }}">About</a>
+    <a href="{{ url_for('how_it_works') }}">How it works</a>
+    <a href="{{ url_for('faq') }}">FAQ</a>
+    <a href="{{ url_for('contact') }}">Contact</a>
     {% if session.get('user_id') %}
       <a href="{{ url_for('dashboard') }}">Dashboard</a>
       <a href="{{ url_for('students') }}">Students</a>
@@ -26,20 +30,16 @@
       <a href="{{ url_for('change_password') }}">Account</a>
       <form class="inline" method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="nav-button" type="submit">Log out</button></form>
     {% else %}
-      <a href="{{ url_for('login') }}">Admin login</a>
+      <a class="nav-signin" href="{{ url_for('login') }}">Sign in</a>
     {% endif %}
   </nav>
 </header>
 <main class="container" id="main-content" tabindex="-1">
   {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      <div class="flash-stack">{% for category, message in messages %}
-        <div class="flash {{ category }}" role="status">{{ message }}</div>
-      {% endfor %}</div>
-    {% endif %}
+    {% if messages %}<div class="flash-stack" aria-live="polite">{% for category, message in messages %}<div class="flash {{ category }}" role="status">{{ message }}</div>{% endfor %}</div>{% endif %}
   {% endwith %}
   {% block content %}{% endblock %}
 </main>
-<footer class="footer">StudentVerifi · Ebonyi State University, Abakaliki · Academic prototype</footer>
+<footer class="footer"><div class="footer-inner"><span>StudentVerifi · Ebonyi State University, Abakaliki</span><nav aria-label="Footer navigation"><a href="{{ url_for('privacy') }}">Privacy</a><a href="{{ url_for('contact') }}">Contact</a></nav><span>Academic prototype</span></div></footer>
 </body>
 </html>

@@ -1,13 +1,1 @@
-{% extends "base.html" %}
-{% block title %}Admin Login{% endblock %}
-{% block content %}
-<div class="auth-wrap"><section class="panel auth-panel">
-  <span class="eyebrow">SECURE ACCESS</span><h1>Admin sign in</h1><p class="muted">Sign in to manage student identities and verify QR codes.</p>
-  <form method="post" class="form-stack"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label>Username<input name="username" autocomplete="username" required autofocus></label>
-    <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
-    <button class="btn primary full" type="submit">Sign in</button>
-  </form>
-  <p class="hint">First-run demo credentials are listed in README.md. Change the default password immediately.</p>
-</section></div>
-{% endblock %}
+{% extends "base.html" %}{% block title %}Sign in · StudentVerifi{% endblock %}{% block content %}<div class="auth-wrap"><section class="panel auth-panel"><span class="eyebrow">SECURE ACCESS</span><h1>Sign in</h1><p class="muted">Sign in with your authorised account to continue.</p><form method="post" class="form-stack"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Username<input name="username" autocomplete="username" required></label><label>Password<input type="password" name="password" autocomplete="current-password" required></label><button class="btn primary full" type="submit">Sign in</button></form></section></div>{% endblock %}

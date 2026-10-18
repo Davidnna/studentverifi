@@ -1,28 +1,14 @@
 {% extends "base.html" %}
-{% block title %}StudentVerifi · EBSU Student Identity Verification{% endblock %}
+{% block title %}StudentVerifi · Student Identity Verification{% endblock %}
 {% block content %}
-<section class="hero">
-  <div class="hero-copy">
-    <span class="eyebrow">STUDENT IDENTITY MANAGEMENT</span>
-    <h1>Verify student identity with confidence.</h1>
-    <p>Register students, issue unique QR codes and check current student status from one simple dashboard.</p>
-    <div class="actions"><a class="btn primary" href="{{ url_for('login') }}">Open admin portal</a><a class="btn secondary" href="{{ url_for('login') }}">Sign in</a></div>
-    <div class="trust-row"><span>✓ Database-backed checks</span><span>✓ Verification history</span><span>✓ Printable QR codes</span></div>
-  </div>
-  <div class="hero-card">
-    <div class="mock-id">
-      <div class="mock-school">EBONYI STATE UNIVERSITY</div>
-      <div class="mock-avatar">ST</div>
-      <h3>Student Identity Card</h3>
-      <p>Sample student record</p>
-      <div class="mock-qr" aria-label="Illustrative QR code graphic" role="img"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-      <small>QR-linked verification</small>
-    </div>
-  </div>
+<section class="hero public-hero" aria-labelledby="hero-title">
+ <div class="hero-copy"><span class="eyebrow">STUDENT IDENTITY VERIFICATION</span><h1 id="hero-title">Clearer, more reliable student identity checks.</h1>
+ <p>StudentVerifi is an academic prototype exploring how QR codes can support student identity verification and help authorised personnel check student status efficiently.</p>
+ <div class="actions"><a class="btn primary" href="{{ url_for('how_it_works') }}">Explore how it works</a><a class="btn secondary" href="{{ url_for('about') }}">About the project</a></div>
+ <p class="fine-print">This is a project prototype, not an official university service. It does not replace institutional identification policies.</p></div>
+ <div class="hero-card" aria-label="Illustration of a student identity card"><div class="mock-id"><div class="mock-school">EBONYI STATE UNIVERSITY</div><div class="mock-avatar" aria-hidden="true">SV</div><h2>Student identity</h2><p>Illustrative sample only</p><div class="mock-qr" role="img" aria-label="Decorative QR-code illustration"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><small>QR-supported verification concept</small></div></div>
 </section>
-<section class="feature-grid">
-  <article class="feature"><div class="feature-icon">01</div><h3>Register</h3><p>Maintain student records and registration status.</p></article>
-  <article class="feature"><div class="feature-icon">02</div><h3>Generate</h3><p>Issue a unique QR token for each student.</p></article>
-  <article class="feature"><div class="feature-icon">03</div><h3>Verify</h3><p>Check the token against the live database.</p></article>
-</section>
+<section class="section-block" aria-labelledby="benefits-title"><div class="section-intro"><span class="eyebrow">THE IDEA</span><h2 id="benefits-title">Designed around a simple process</h2><p>The project explores a digital alternative to relying only on manual record checks.</p></div>
+<div class="feature-grid"><article class="feature"><div class="feature-icon" aria-hidden="true">01</div><h3>Unique QR credentials</h3><p>A QR code can link to a unique, non-descriptive token rather than displaying personal details in the code itself.</p></article><article class="feature"><div class="feature-icon" aria-hidden="true">02</div><h3>Record-based checks</h3><p>Authorised checks can compare a token with a student record and its current status.</p></article><article class="feature"><div class="feature-icon" aria-hidden="true">03</div><h3>Traceable activity</h3><p>Verification events can be recorded to support review and accountability by authorised personnel.</p></article></div></section>
+<section class="callout"><div><h2>Learn about the verification process</h2><p>Read about the project goals, the proposed workflow, and its current prototype status.</p></div><a class="btn primary" href="{{ url_for('how_it_works') }}">How it works</a></section>
 {% endblock %}

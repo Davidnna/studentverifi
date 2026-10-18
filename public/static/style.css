@@ -61,3 +61,49 @@ img,video,canvas,svg{max-width:100%}
   .btn,.pill,.feature-icon,.brand-mark{border:1px solid ButtonText}
   a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid Highlight}
 }
+
+
+/* Public information pages, accessible focus states, and responsive navigation */
+:focus-visible { outline: 3px solid #f59e0b; outline-offset: 3px; }
+.public-nav { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:clamp(.65rem, 2vw, 1.4rem); }
+.public-nav a { text-decoration:none; }
+.public-nav .nav-signin { font-weight:700; }
+.section-block { margin:clamp(2.5rem, 6vw, 5rem) 0; }
+.section-intro { max-width:700px; margin:0 auto 1.5rem; text-align:center; }
+.section-intro h2 { margin:.35rem 0 .6rem; }
+.section-intro p,.fine-print { color:var(--muted, #64748b); }
+.fine-print { font-size:.92rem; max-width:58ch; margin-top:1rem; }
+.content-page { max-width:900px; margin:clamp(1.5rem, 4vw, 3rem) auto; padding:clamp(1.25rem, 4vw, 3rem); background:#fff; border:1px solid #e2e8f0; border-radius:1.25rem; }
+.content-page h1 { font-size:clamp(2rem, 5vw, 3.25rem); line-height:1.12; letter-spacing:-.035em; margin:.5rem 0 1rem; }
+.content-page .lead { color:#475569; font-size:clamp(1.05rem, 2.2vw, 1.25rem); line-height:1.7; max-width:68ch; }
+.prose { line-height:1.75; max-width:75ch; }
+.prose h2 { margin-top:2rem; font-size:1.35rem; }
+.prose li { margin:.45rem 0; padding-inline-start:.2rem; }
+.steps-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; margin:2rem 0; }
+.step-card,.contact-card { padding:1.25rem; border:1px solid #e2e8f0; border-radius:1rem; background:#f8fafc; }
+.step-number { display:inline-grid; place-items:center; width:2.25rem; height:2.25rem; border-radius:50%; background:#dbeafe; color:#1d4ed8; font-weight:800; }
+.step-card h2,.contact-card h2 { font-size:1.15rem; margin:.8rem 0 .4rem; }
+.faq-list { display:grid; gap:.75rem; margin-top:1.5rem; }
+.faq-list details { padding:1rem 1.15rem; border:1px solid #e2e8f0; border-radius:.8rem; }
+.faq-list summary { cursor:pointer; font-weight:700; line-height:1.5; }
+.faq-list details p { line-height:1.7; color:#475569; }
+.callout { display:flex; justify-content:space-between; align-items:center; gap:1.5rem; padding:clamp(1.25rem,3vw,2rem); border-radius:1.2rem; background:#eaf2ff; margin:2rem 0 3rem; }
+.callout h2 { margin:0 0 .5rem; }
+.callout p { margin:0; color:#475569; }
+.footer-inner { display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+.footer-inner nav { display:flex; gap:1rem; }
+.footer-inner a { color:inherit; }
+@media (max-width:760px) {
+ .topbar { align-items:flex-start; flex-direction:column; gap:.75rem; }
+ .public-nav { width:100%; justify-content:flex-start; gap:.75rem 1rem; }
+ .public-hero { gap:1.5rem; }
+ .steps-grid { grid-template-columns:1fr; }
+ .callout { align-items:flex-start; flex-direction:column; }
+ .footer-inner { align-items:flex-start; flex-direction:column; }
+}
+@media (max-width:420px) {
+ .brand img { max-width:min(260px, 82vw); height:auto; }
+ .public-nav { font-size:.95rem; }
+ .content-page { padding:1.1rem; border-radius:.85rem; }
+}
+@media (prefers-reduced-motion: reduce) { *,*::before,*::after { scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; } }

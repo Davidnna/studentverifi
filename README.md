@@ -50,3 +50,9 @@ The application name is StudentVerifi. The institution subtitle remains Ebonyi S
 - The application creates its tables during startup. This is convenient for a small prototype but is not a substitute for versioned database migrations in a larger system.
 - Serverless instances may start and stop, so the database must remain the persistent source of truth.
 - Before entering real student data, confirm database backups and access controls.
+
+
+## Public information pages
+The public interface includes Home, About, How it works, FAQ, Privacy, and Contact pages. These pages are informational and do not expose student records or operational verification tools. Sign-in is labelled neutrally in the public navigation.
+
+Accessibility and responsive design include semantic page structure, a skip link, visible keyboard focus, scalable headings, responsive layouts, accessible status messages, and reduced-motion support. Please still test with keyboard navigation, a screen reader, and small-screen devices before presenting the prototype.
