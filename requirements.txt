@@ -1,0 +1,7 @@
+Flask>=3.1,<4.0
+SQLAlchemy>=2.0,<3.0
+PyMySQL>=1.1,<2.0
+qrcode[pil]>=7.4,<9.0
+gunicorn>=23,<27
+python-dotenv>=1.0,<2.0
+Flask-WTF>=1.2,<2.0

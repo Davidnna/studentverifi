@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow">OVERVIEW</span><h1>Dashboard</h1><p class="muted">Welcome back, {{ session.get('username') }}. Here's the current system overview.</p></div><a class="btn primary" href="{{ url_for('add_student') }}">+ Register student</a></div>
+<div class="stats-grid">
+  <div class="stat-card"><span>Total students</span><strong>{{ total }}</strong><small>Registered records</small></div>
+  <div class="stat-card"><span>Active students</span><strong>{{ active }}</strong><small>Eligible for verification</small></div>
+  <div class="stat-card"><span>Inactive students</span><strong>{{ inactive }}</strong><small>Not currently valid</small></div>
+  <div class="stat-card"><span>Verification checks</span><strong>{{ checks }}</strong><small>All recorded attempts</small></div>
+</div>
+<div class="section-heading"><h2>Recent verification activity</h2><a href="{{ url_for('logs') }}">View all logs →</a></div>
+<div class="panel table-wrap"><table><thead><tr><th>Student</th><th>Matric number</th><th>Result</th><th>Verified by</th><th>Date and time</th></tr></thead><tbody>
+{% for row in recent %}<tr><td>{{ row.full_name or 'Unknown token' }}</td><td>{{ row.matric_no or '—' }}</td><td><span class="pill {{ row.result|lower }}">{{ row.result }}</span></td><td>{{ row.username or '—' }}</td><td>{{ row.verified_at }}</td></tr>
+{% else %}<tr><td colspan="5" class="empty">No verification attempts yet.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

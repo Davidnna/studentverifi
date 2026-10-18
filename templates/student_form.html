@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Register Student{% endblock %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow">NEW RECORD</span><h1>Register student</h1><p class="muted">Required fields are marked with an asterisk.</p></div><a class="btn secondary" href="{{ url_for('students') }}">← Back to students</a></div>
+<section class="panel form-panel"><form method="post" class="form-stack"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="form-grid">
+    <label>Matriculation number *<input name="matric_no" required maxlength="50" placeholder="e.g. CSC/2022/001"></label>
+    <label>Full name *<input name="full_name" required maxlength="120" placeholder="Student's full name"></label>
+    <label>Department *<input name="department" required maxlength="100" placeholder="e.g. Computer Science"></label>
+    <label>Level *<select name="level" required><option value="">Select level</option><option>100</option><option>200</option><option>300</option><option>400</option><option>500</option><option>Postgraduate</option></select></label>
+    <label>Email (optional)<input name="email" type="email" maxlength="150" placeholder="student@example.edu"></label>
+    <label>Photo URL (optional)<input name="photo_url" type="url" placeholder="https://..."></label>
+  </div>
+  <div class="notice">A unique random QR token will be generated automatically. Do not enter personal data into the QR code.</div>
+  <div class="actions"><button class="btn primary" type="submit">Register student</button><a class="btn secondary" href="{{ url_for('students') }}">Cancel</a></div>
+</form></section>
+{% endblock %}
