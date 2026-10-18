@@ -1,12 +1,3 @@
 {
-  "rewrites": [
-    {
-      "source": "/static/(.*)",
-      "destination": "/static/$1"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/app.py"
-    }
-  ]
+  "$schema": "https://openapi.vercel.sh/vercel.json"
 }
