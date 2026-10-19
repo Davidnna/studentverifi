@@ -266,16 +266,16 @@ def student_register():
         if not all([matric,email,code,password,confirm]):
             flash("Complete every field.", "danger"); return render_template("student_register.html")
         if len(password)<10 or password!=confirm:
-            flash("Use a password of at least 10 characters and ensure both passwords match.", "danger"); return render_template("student_register.html")
+            flash("Please use a password with at least 10 characters and make sure both password fields match.", "danger"); return render_template("student_register.html")
         with get_db() as db:
             student=db.execute("SELECT * FROM students WHERE matric_no = ?",(matric,)).fetchone()
             if not student or not student["claim_code_hash"] or student["claimed_at"] or not student["email"] or student["email"].strip().lower()!=email or not check_password_hash(student["claim_code_hash"],code):
-                flash("Unable to claim this record. Check your details or contact the authorized office.","danger"); return render_template("student_register.html")
+                flash("We couldn’t match those details. Please check your information or contact the appropriate university office for assistance.", "danger"); return render_template("student_register.html")
             if db.execute("SELECT id FROM users WHERE username = ?",(matric,)).fetchone():
                 flash("An account already exists for this record. Please sign in.","warning"); return redirect(url_for("login"))
             db.execute("INSERT INTO users (username,password_hash,role,student_id,created_at) VALUES (?,?,'student',?,?)",(matric,generate_password_hash(password),student["id"],now()))
             db.execute("UPDATE students SET claimed_at = ?, claim_code_hash = NULL WHERE id = ?",(now(),student["id"]))
-        flash("Student account created. You can now sign in.","success"); return redirect(url_for("login"))
+        flash("Your student account has been created. You can now sign in.", "success"); return redirect(url_for("login"))
     return render_template("student_register.html")
 
 @app.route("/student/account")

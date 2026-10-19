@@ -18,22 +18,21 @@
     <img src="{{ url_for('static', filename='logo.svg') }}" alt="StudentVerifi — EBSU Identity Verification" width="260" height="60">
   </a>
   <nav aria-label="Main navigation" class="public-nav">
-    <a href="{{ url_for('about') }}">About</a>
-    <a href="{{ url_for('how_it_works') }}">How it works</a>
-    <a href="{{ url_for('faq') }}">FAQ</a>
-    <a href="{{ url_for('contact') }}">Contact</a>
     {% if session.get('user_id') and session.get('role') == 'admin' %}
       <a href="{{ url_for('dashboard') }}">Dashboard</a>
       <a href="{{ url_for('students') }}">Students</a>
-      <a href="{{ url_for('verify') }}">Verify ID</a>
-      <a href="{{ url_for('logs') }}">Logs</a>
-      <a href="{{ url_for('change_password') }}">Account</a>
+      <a href="{{ url_for('logs') }}">Verification logs</a>
       <form class="inline" method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="nav-button" type="submit">Log out</button></form>
     {% elif session.get('user_id') and session.get('role') == 'student' %}
       <a href="{{ url_for('student_account') }}">My account</a>
       <form class="inline" method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="nav-button" type="submit">Log out</button></form>
     {% else %}
-      <a href="{{ url_for('student_register') }}">Student registration</a>
+      <a href="{{ url_for('index') }}">Home</a>
+      <a href="{{ url_for('about') }}">About</a>
+      <a href="{{ url_for('how_it_works') }}">How it works</a>
+      <a href="{{ url_for('faq') }}">FAQ</a>
+      <a href="{{ url_for('contact') }}">Contact</a>
+      <a href="{{ url_for('student_register') }}">Register</a>
       <a class="nav-signin" href="{{ url_for('login') }}">Sign in</a>
     {% endif %}
   </nav>
@@ -44,6 +43,6 @@
   {% endwith %}
   {% block content %}{% endblock %}
 </main>
-<footer class="footer"><div class="footer-inner"><span>StudentVerifi · Ebonyi State University, Abakaliki</span><nav aria-label="Footer navigation"><a href="{{ url_for('privacy') }}">Privacy</a><a href="{{ url_for('contact') }}">Contact</a></nav><span>Academic prototype</span></div></footer>
+<footer class="footer"><div class="footer-inner"><span>StudentVerifi · Ebonyi State University, Abakaliki</span>{% if not session.get('user_id') %}<nav aria-label="Footer navigation"><a href="{{ url_for('privacy') }}">Privacy</a><a href="{{ url_for('contact') }}">Contact</a></nav>{% endif %}<span>Academic prototype</span></div></footer>
 </body>
 </html>

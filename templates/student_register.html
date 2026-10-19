@@ -1,1 +1,25 @@
-{% extends "base.html" %}{% block title %}Student registration · StudentVerifi{% endblock %}{% block content %}<section class="panel form-panel narrow-panel"><h1>Claim your student record</h1><p class="muted">Your record must already exist. Get a one-time code from an authorized staff member.</p><form method="post" class="form-stack"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label for="matric_no">Matriculation number</label><input id="matric_no" name="matric_no" required autocomplete="username"><label for="email">Email recorded for you</label><input id="email" name="email" type="email" required autocomplete="email"><label for="claim_code">One-time claim code</label><input id="claim_code" name="claim_code" required autocomplete="one-time-code"><label for="password">Create password (10+ characters)</label><input id="password" name="password" type="password" minlength="10" required autocomplete="new-password"><label for="confirm_password">Confirm password</label><input id="confirm_password" name="confirm_password" type="password" minlength="10" required autocomplete="new-password"><button class="btn primary full" type="submit">Create account</button></form></section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Create your student account · StudentVerifi{% endblock %}
+{% block content %}
+<section class="panel form-panel narrow-panel" aria-labelledby="register-title">
+  <h1 id="register-title">Create your student account</h1>
+  <p class="muted">Welcome to StudentVerifi. Enter your details below to access your student account.</p>
+  <form method="post" class="form-stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="matric_no">Matriculation number</label>
+    <input id="matric_no" name="matric_no" required autocomplete="username" autocapitalize="characters">
+    <label for="email">Email address</label>
+    <input id="email" name="email" type="email" required autocomplete="email">
+    <label for="claim_code">Registration code</label>
+    <input id="claim_code" name="claim_code" required autocomplete="one-time-code" aria-describedby="registration-code-help">
+    <p class="fine-print" id="registration-code-help">If you need a registration code, contact the appropriate university office for assistance.</p>
+    <label for="password">Create password</label>
+    <input id="password" name="password" type="password" minlength="10" required autocomplete="new-password" aria-describedby="password-help">
+    <p class="fine-print" id="password-help">Use at least 10 characters.</p>
+    <label for="confirm_password">Confirm password</label>
+    <input id="confirm_password" name="confirm_password" type="password" minlength="10" required autocomplete="new-password">
+    <button class="btn primary full" type="submit">Create account</button>
+  </form>
+  <p class="muted">Already registered? <a href="{{ url_for('login') }}">Sign in</a>.</p>
+</section>
+{% endblock %}
