@@ -22,14 +22,18 @@
     <a href="{{ url_for('how_it_works') }}">How it works</a>
     <a href="{{ url_for('faq') }}">FAQ</a>
     <a href="{{ url_for('contact') }}">Contact</a>
-    {% if session.get('user_id') %}
+    {% if session.get('user_id') and session.get('role') == 'admin' %}
       <a href="{{ url_for('dashboard') }}">Dashboard</a>
       <a href="{{ url_for('students') }}">Students</a>
       <a href="{{ url_for('verify') }}">Verify ID</a>
       <a href="{{ url_for('logs') }}">Logs</a>
       <a href="{{ url_for('change_password') }}">Account</a>
       <form class="inline" method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="nav-button" type="submit">Log out</button></form>
+    {% elif session.get('user_id') and session.get('role') == 'student' %}
+      <a href="{{ url_for('student_account') }}">My account</a>
+      <form class="inline" method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="nav-button" type="submit">Log out</button></form>
     {% else %}
+      <a href="{{ url_for('student_register') }}">Student registration</a>
       <a class="nav-signin" href="{{ url_for('login') }}">Sign in</a>
     {% endif %}
   </nav>

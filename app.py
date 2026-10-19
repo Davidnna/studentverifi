@@ -68,31 +68,32 @@ engine = create_engine(database_url(), pool_pre_ping=True, pool_recycle=280,
 csrf = CSRFProtect(app)
 
 
+class CompatRow:
+    def __init__(self, row): self.row, self.mapping = row, row._mapping
+    def __getitem__(self, key): return self.mapping[key] if isinstance(key, str) else self.row[key]
+    def __getattr__(self, name): return getattr(self.row, name)
+class CompatResult:
+    def __init__(self, result): self.result = result
+    def fetchone(self):
+        row=self.result.fetchone(); return CompatRow(row) if row is not None else None
+    def fetchall(self): return [CompatRow(r) for r in self.result.fetchall()]
+    def first(self):
+        row=self.result.first(); return CompatRow(row) if row is not None else None
 class DBCompat:
-    """Small compatibility layer to keep the starter's parameterized SQL readable."""
-    def __init__(self, connection):
-        self.connection = connection
-
+    def __init__(self, connection): self.connection = connection
     def execute(self, sql, params=()):
-        sql = sql.strip()
+        sql=sql.strip()
         if params:
-            parts = sql.split("?")
-            if len(parts) - 1 != len(params):
-                raise ValueError("SQL placeholder count does not match parameters")
-            rendered = parts[0]
-            values = {}
-            for i, value in enumerate(params):
-                key = f"p{i}"
-                rendered += f":{key}" + parts[i + 1]
-                values[key] = value
-            return self.connection.execute(text(rendered), values)
-        return self.connection.execute(text(sql))
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        return False
+            parts=sql.split("?")
+            if len(parts)-1 != len(params): raise ValueError("SQL placeholder count does not match parameters")
+            rendered=parts[0]; values={}
+            for i,value in enumerate(params):
+                key=f"p{i}"; rendered += f":{key}" + parts[i+1]; values[key]=value
+            result=self.connection.execute(text(rendered),values)
+        else: result=self.connection.execute(text(sql))
+        return CompatResult(result)
+    def __enter__(self): return self
+    def __exit__(self, exc_type, exc, tb): return False
 
 
 class DBContext:
@@ -116,6 +117,7 @@ def init_db():
             username VARCHAR(80) UNIQUE NOT NULL,
             password_hash VARCHAR(255) NOT NULL,
             role VARCHAR(30) NOT NULL DEFAULT 'admin',
+            student_id INTEGER NULL,
             created_at VARCHAR(40) NOT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
         """CREATE TABLE IF NOT EXISTS students (
@@ -129,6 +131,8 @@ def init_db():
             token VARCHAR(128) UNIQUE NOT NULL,
             status VARCHAR(20) NOT NULL DEFAULT 'Active',
             record_source VARCHAR(30) NOT NULL DEFAULT 'synthetic',
+            claim_code_hash VARCHAR(255) NULL,
+            claimed_at VARCHAR(40) NULL,
             created_at VARCHAR(40) NOT NULL,
             INDEX idx_students_full_name (full_name),
             INDEX idx_students_department (department)
@@ -151,6 +155,13 @@ def init_db():
         student_columns = {row[0] for row in connection.execute(text("SHOW COLUMNS FROM students")).fetchall()}
         if "record_source" not in student_columns:
             connection.execute(text("ALTER TABLE students ADD COLUMN record_source VARCHAR(30) NOT NULL DEFAULT 'synthetic'"))
+        if "claim_code_hash" not in student_columns:
+            connection.execute(text("ALTER TABLE students ADD COLUMN claim_code_hash VARCHAR(255) NULL"))
+        if "claimed_at" not in student_columns:
+            connection.execute(text("ALTER TABLE students ADD COLUMN claimed_at VARCHAR(40) NULL"))
+        user_columns = {row[0] for row in connection.execute(text("SHOW COLUMNS FROM users")).fetchall()}
+        if "student_id" not in user_columns:
+            connection.execute(text("ALTER TABLE users ADD COLUMN student_id INTEGER NULL"))
         existing = connection.execute(text("SELECT id FROM users WHERE username = :username"), {"username": os.environ.get("INITIAL_ADMIN_USERNAME", "admin")}).first()
         if not existing:
             # Set INITIAL_ADMIN_PASSWORD in Railway variables before first deploy.
@@ -175,6 +186,17 @@ def login_required(view):
         if not session.get("user_id"):
             flash("Please log in to continue.", "warning")
             return redirect(url_for("login"))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def admin_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("user_id"):
+            flash("Please sign in to continue.", "warning")
+            return redirect(url_for("login"))
+        if session.get("role") != "admin": abort(403)
         return view(*args, **kwargs)
     return wrapped
 
@@ -230,9 +252,52 @@ def login():
             session["user_id"] = user["id"]
             session["username"] = user["username"]
             session["role"] = user["role"]
-            return redirect(url_for("dashboard"))
+            session["student_id"] = user["student_id"]
+            return redirect(url_for("dashboard") if user["role"] == "admin" else url_for("student_account"))
         flash("Invalid username or password.", "danger")
     return render_template("login.html")
+
+
+@app.route("/register", methods=["GET", "POST"])
+def student_register():
+    if request.method == "POST":
+        matric=request.form.get("matric_no", "").strip().upper(); email=request.form.get("email", "").strip().lower()
+        code=request.form.get("claim_code", "").strip(); password=request.form.get("password", ""); confirm=request.form.get("confirm_password", "")
+        if not all([matric,email,code,password,confirm]):
+            flash("Complete every field.", "danger"); return render_template("student_register.html")
+        if len(password)<10 or password!=confirm:
+            flash("Use a password of at least 10 characters and ensure both passwords match.", "danger"); return render_template("student_register.html")
+        with get_db() as db:
+            student=db.execute("SELECT * FROM students WHERE matric_no = ?",(matric,)).fetchone()
+            if not student or not student["claim_code_hash"] or student["claimed_at"] or not student["email"] or student["email"].strip().lower()!=email or not check_password_hash(student["claim_code_hash"],code):
+                flash("Unable to claim this record. Check your details or contact the authorized office.","danger"); return render_template("student_register.html")
+            if db.execute("SELECT id FROM users WHERE username = ?",(matric,)).fetchone():
+                flash("An account already exists for this record. Please sign in.","warning"); return redirect(url_for("login"))
+            db.execute("INSERT INTO users (username,password_hash,role,student_id,created_at) VALUES (?,?,'student',?,?)",(matric,generate_password_hash(password),student["id"],now()))
+            db.execute("UPDATE students SET claimed_at = ?, claim_code_hash = NULL WHERE id = ?",(now(),student["id"]))
+        flash("Student account created. You can now sign in.","success"); return redirect(url_for("login"))
+    return render_template("student_register.html")
+
+@app.route("/student/account")
+def student_account():
+    if not session.get("user_id"): return redirect(url_for("login"))
+    if session.get("role")!="student": abort(403)
+    with get_db() as db: student=db.execute("SELECT * FROM students WHERE id = ?",(session.get("student_id"),)).fetchone()
+    if not student: abort(404)
+    return render_template("student_account.html",student=student)
+
+@app.route("/students/<int:student_id>/claim-code", methods=["POST"])
+@admin_required
+def issue_claim_code(student_id):
+    code=secrets.token_urlsafe(10)
+    with get_db() as db:
+        student=db.execute("SELECT id,claimed_at FROM students WHERE id = ?",(student_id,)).fetchone()
+        if not student: abort(404)
+        if student["claimed_at"]:
+            flash("This record has already been claimed.","warning"); return redirect(url_for("student_detail",student_id=student_id))
+        db.execute("UPDATE students SET claim_code_hash = ? WHERE id = ?",(generate_password_hash(code),student_id))
+    flash("One-time claim code — share privately with the student: "+code,"success")
+    return redirect(url_for("student_detail",student_id=student_id))
 
 
 @app.route("/logout", methods=["POST"])
@@ -243,7 +308,7 @@ def logout():
 
 
 @app.route("/dashboard")
-@login_required
+@admin_required
 def dashboard():
     with get_db() as db:
         total = db.execute("SELECT COUNT(*) FROM students").fetchone()[0]
@@ -261,7 +326,7 @@ def dashboard():
 
 
 @app.route("/students")
-@login_required
+@admin_required
 def students():
     q = request.args.get("q", "").strip()
     with get_db() as db:
@@ -277,7 +342,7 @@ def students():
 
 
 @app.route("/students/new", methods=["GET", "POST"])
-@login_required
+@admin_required
 def add_student():
     if request.method == "POST":
         matric_no = request.form.get("matric_no", "").strip().upper()
@@ -308,7 +373,7 @@ def add_student():
 
 
 @app.route("/students/import-template.csv")
-@login_required
+@admin_required
 def student_import_template():
     output = io.StringIO()
     writer = csv.writer(output)
@@ -318,7 +383,7 @@ def student_import_template():
 
 
 @app.route("/students/import", methods=["GET", "POST"])
-@login_required
+@admin_required
 def import_students():
     if request.method == "GET":
         return render_template("student_import.html")
@@ -371,7 +436,7 @@ def import_students():
 
 
 @app.route("/students/synthetic-demo", methods=["POST"])
-@login_required
+@admin_required
 def create_synthetic_demo():
     samples = [
       ("TEST/CSC/001","Ada Example","Computer Science","400","ada.example@example.com"),
@@ -390,7 +455,7 @@ def create_synthetic_demo():
 
 
 @app.route("/students/<int:student_id>")
-@login_required
+@admin_required
 def student_detail(student_id):
     with get_db() as db:
         student = db.execute("SELECT * FROM students WHERE id = ?", (student_id,)).fetchone()
@@ -400,7 +465,7 @@ def student_detail(student_id):
 
 
 @app.route("/students/<int:student_id>/qr.png")
-@login_required
+@admin_required
 def student_qr(student_id):
     with get_db() as db:
         student = db.execute("SELECT token FROM students WHERE id = ?", (student_id,)).fetchone()
@@ -410,7 +475,7 @@ def student_qr(student_id):
 
 
 @app.route("/students/<int:student_id>/toggle-status", methods=["POST"])
-@login_required
+@admin_required
 def toggle_status(student_id):
     with get_db() as db:
         student = db.execute("SELECT status FROM students WHERE id = ?", (student_id,)).fetchone()
@@ -423,7 +488,7 @@ def toggle_status(student_id):
 
 
 @app.route("/verify", methods=["GET", "POST"])
-@login_required
+@admin_required
 def verify():
     result = None
     submitted = ""
@@ -446,7 +511,7 @@ def verify():
 
 
 @app.route("/logs")
-@login_required
+@admin_required
 def logs():
     with get_db() as db:
         rows = db.execute("""
@@ -460,7 +525,7 @@ def logs():
 
 
 @app.route("/account/password", methods=["GET", "POST"])
-@login_required
+@admin_required
 def change_password():
     if request.method == "POST":
         current = request.form.get("current_password", "")
@@ -478,6 +543,10 @@ def change_password():
                 flash("Current password was incorrect.", "danger")
     return render_template("change_password.html")
 
+
+@app.errorhandler(403)
+def forbidden(_error):
+    return render_template("403.html"), 403
 
 @app.errorhandler(404)
 def not_found(_error):
