@@ -21,6 +21,7 @@
     {% if session.get('user_id') and session.get('role') == 'admin' %}
       <a href="{{ url_for('dashboard') }}">Dashboard</a>
       <a href="{{ url_for('students') }}">Students</a>
+      <a href="{{ url_for('registration_requests') }}">Registration requests</a>
       <a href="{{ url_for('logs') }}">Verification logs</a>
       <form class="inline" method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="nav-button" type="submit">Log out</button></form>
     {% elif session.get('user_id') and session.get('role') == 'student' %}

@@ -148,7 +148,19 @@ def init_db():
             CONSTRAINT fk_logs_student FOREIGN KEY(student_id) REFERENCES students(id) ON DELETE SET NULL,
             CONSTRAINT fk_logs_user FOREIGN KEY(verified_by) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"""
-    ]
+,
+        """CREATE TABLE IF NOT EXISTS student_account_requests (
+            id INTEGER PRIMARY KEY AUTO_INCREMENT,
+            student_id INTEGER NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'Pending',
+            requested_at VARCHAR(40) NOT NULL,
+            reviewed_at VARCHAR(40) NULL,
+            reviewed_by INTEGER NULL,
+            INDEX idx_account_requests_status (status),
+            CONSTRAINT fk_requests_student FOREIGN KEY(student_id) REFERENCES students(id) ON DELETE CASCADE,
+            CONSTRAINT fk_requests_reviewer FOREIGN KEY(reviewed_by) REFERENCES users(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"""    ]
     with engine.begin() as connection:
         for statement in statements:
             connection.execute(text(statement))
@@ -260,23 +272,89 @@ def login():
 
 @app.route("/register", methods=["GET", "POST"])
 def student_register():
+    """Submit a student account request for administrator review.
+
+    Matching a record is not proof of identity. This approval workflow is for
+    the academic prototype; a real university deployment needs an approved
+    identity-checking procedure.
+    """
+    if session.get("user_id"):
+        return redirect(url_for("dashboard") if session.get("role") == "admin" else url_for("student_account"))
     if request.method == "POST":
-        matric=request.form.get("matric_no", "").strip().upper(); email=request.form.get("email", "").strip().lower()
-        code=request.form.get("claim_code", "").strip(); password=request.form.get("password", ""); confirm=request.form.get("confirm_password", "")
-        if not all([matric,email,code,password,confirm]):
-            flash("Complete every field.", "danger"); return render_template("student_register.html")
-        if len(password)<10 or password!=confirm:
-            flash("Please use a password with at least 10 characters and make sure both password fields match.", "danger"); return render_template("student_register.html")
+        matric = request.form.get("matric_no", "").strip().upper()
+        full_name = request.form.get("full_name", "").strip()
+        department = request.form.get("department", "").strip()
+        level = request.form.get("level", "").strip()
+        password = request.form.get("password", "")
+        confirm = request.form.get("confirm_password", "")
+        if not all([matric, full_name, department, level, password, confirm]):
+            flash("Please complete all fields.", "danger")
+            return render_template("student_register.html")
+        if len(password) < 10:
+            flash("Please choose a password with at least 10 characters.", "danger")
+            return render_template("student_register.html")
+        if password != confirm:
+            flash("The passwords don't match. Please try again.", "danger")
+            return render_template("student_register.html")
         with get_db() as db:
-            student=db.execute("SELECT * FROM students WHERE matric_no = ?",(matric,)).fetchone()
-            if not student or not student["claim_code_hash"] or student["claimed_at"] or not student["email"] or student["email"].strip().lower()!=email or not check_password_hash(student["claim_code_hash"],code):
-                flash("We couldn’t match those details. Please check your information or contact the appropriate university office for assistance.", "danger"); return render_template("student_register.html")
-            if db.execute("SELECT id FROM users WHERE username = ?",(matric,)).fetchone():
-                flash("An account already exists for this record. Please sign in.","warning"); return redirect(url_for("login"))
-            db.execute("INSERT INTO users (username,password_hash,role,student_id,created_at) VALUES (?,?,'student',?,?)",(matric,generate_password_hash(password),student["id"],now()))
-            db.execute("UPDATE students SET claimed_at = ?, claim_code_hash = NULL WHERE id = ?",(now(),student["id"]))
-        flash("Your student account has been created. You can now sign in.", "success"); return redirect(url_for("login"))
+            student = db.execute("SELECT * FROM students WHERE matric_no = ?", (matric,)).fetchone()
+            if not student or student["full_name"].strip().casefold() != full_name.casefold() or student["department"].strip().casefold() != department.casefold() or student["level"].strip().casefold() != level.casefold():
+                flash("We couldn't match those details to a student record. Check your entries or ask the project administrator for help.", "danger")
+                return render_template("student_register.html")
+            if db.execute("SELECT id FROM users WHERE username = ?", (matric,)).fetchone():
+                flash("An account already exists for this record. Please sign in.", "warning")
+                return redirect(url_for("login"))
+            pending = db.execute("SELECT id FROM student_account_requests WHERE student_id = ? AND status = 'Pending'", (student["id"],)).fetchone()
+            if pending:
+                flash("An account request for this record is already awaiting review.", "warning")
+                return redirect(url_for("login"))
+            db.execute("INSERT INTO student_account_requests (student_id, password_hash, status, requested_at) VALUES (?, ?, 'Pending', ?)", (student["id"], generate_password_hash(password), now()))
+        flash("Your request has been submitted for review. You can sign in after an administrator approves it.", "success")
+        return redirect(url_for("login"))
     return render_template("student_register.html")
+
+
+@app.route("/registration-requests")
+@admin_required
+def registration_requests():
+    with get_db() as db:
+        requests = db.execute("""SELECT r.id, r.status, r.requested_at, s.matric_no, s.full_name,
+            s.department, s.level FROM student_account_requests r
+            JOIN students s ON s.id = r.student_id
+            WHERE r.status = 'Pending' ORDER BY r.id ASC""").fetchall()
+    return render_template("registration_requests.html", requests=requests)
+
+
+@app.route("/registration-requests/<int:request_id>/<decision>", methods=["POST"])
+@admin_required
+def review_registration_request(request_id, decision):
+    if decision not in ("approve", "reject"):
+        abort(404)
+    with get_db() as db:
+        req = db.execute("SELECT * FROM student_account_requests WHERE id = ?", (request_id,)).fetchone()
+        if not req:
+            abort(404)
+        if req["status"] != "Pending":
+            flash("This request has already been reviewed.", "warning")
+            return redirect(url_for("registration_requests"))
+        student = db.execute("SELECT * FROM students WHERE id = ?", (req["student_id"],)).fetchone()
+        if not student:
+            db.execute("UPDATE student_account_requests SET status = 'Rejected', reviewed_at = ?, reviewed_by = ? WHERE id = ?", (now(), session["user_id"], request_id))
+            flash("The student record no longer exists; the request was rejected.", "warning")
+            return redirect(url_for("registration_requests"))
+        if decision == "approve":
+            existing = db.execute("SELECT id FROM users WHERE username = ?", (student["matric_no"],)).fetchone()
+            if existing:
+                db.execute("UPDATE student_account_requests SET status = 'Rejected', reviewed_at = ?, reviewed_by = ? WHERE id = ?", (now(), session["user_id"], request_id))
+                flash("An account already exists for this student; the request was not approved.", "warning")
+                return redirect(url_for("registration_requests"))
+            db.execute("INSERT INTO users (username, password_hash, role, student_id, created_at) VALUES (?, ?, 'student', ?, ?)", (student["matric_no"], req["password_hash"], student["id"], now()))
+            status = "Approved"
+        else:
+            status = "Rejected"
+        db.execute("UPDATE student_account_requests SET status = ?, reviewed_at = ?, reviewed_by = ? WHERE id = ?", (status, now(), session["user_id"], request_id))
+    flash("Account request approved. The student can now sign in." if decision == "approve" else "Account request rejected.", "success" if decision == "approve" else "warning")
+    return redirect(url_for("registration_requests"))
 
 @app.route("/student/account")
 def student_account():

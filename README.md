@@ -61,3 +61,10 @@ Accessibility and responsive design include semantic page structure, a skip link
 ## Synthetic records and CSV import
 
 Use Students → Add sample test records to create five fictional examples, or download the CSV template from Students → Import CSV. CSV imports are limited to 2 MB, validate required fields, email format, duplicate rows, and existing matriculation numbers, and reject the whole file when validation errors occur. Manual and CSV-created records are marked synthetic. Do not represent them as official EBSU records. This release does not implement student self-service claims, facial recognition, liveness detection, or official-data integrations; these require separate privacy review, design, and testing.
+
+
+## Student account requests (prototype)
+
+Students can request an account using their matriculation number, full name, department, level, and a password. StudentVerifi matches those details against an existing student record and queues a request for an administrator to review under **Registration requests**. Approval creates the student login; rejection does not. The password is stored as a password hash.
+
+The included/sample records are fictional demonstration data and are not official EBSU records. Record matching is not proof of identity. For a real deployment, EBSU must authorize the student data source and approve a suitable identity-verification process before accounts are activated. This prototype does not integrate with the EBSU portal.

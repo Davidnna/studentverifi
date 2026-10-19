@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Registration requests · StudentVerifi{% endblock %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow">ACCOUNT REVIEW</span><h1>Registration requests</h1><p class="muted">Review requests against the student records available to this prototype.</p></div><a class="btn secondary" href="{{ url_for('students') }}">Back to students</a></div>
+<div class="notice" role="note">Prototype limitation: matching details does not prove a person's identity. Only approve a demonstration request after the identity check you have defined for your test. A real deployment needs a verification procedure approved by the university.</div>
+<div class="panel table-wrap"><table><thead><tr><th>Matriculation number</th><th>Student</th><th>Department</th><th>Level</th><th>Requested</th><th>Actions</th></tr></thead><tbody>
+{% for r in requests %}<tr><td><strong>{{ r.matric_no }}</strong></td><td>{{ r.full_name }}</td><td>{{ r.department }}</td><td>{{ r.level }}</td><td>{{ r.requested_at }}</td><td><div class="actions"><form method="post" action="{{ url_for('review_registration_request', request_id=r.id, decision='approve') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn primary" type="submit">Approve</button></form><form method="post" action="{{ url_for('review_registration_request', request_id=r.id, decision='reject') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn secondary" type="submit">Reject</button></form></div></td></tr>
+{% else %}<tr><td colspan="6" class="empty">No pending registration requests.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

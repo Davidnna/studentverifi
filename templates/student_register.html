@@ -2,24 +2,26 @@
 {% block title %}Create your student account · StudentVerifi{% endblock %}
 {% block content %}
 <section class="panel form-panel narrow-panel" aria-labelledby="register-title">
-  <h1 id="register-title">Create your student account</h1>
-  <p class="muted">Welcome to StudentVerifi. Enter your details below to access your student account.</p>
+  <h1 id="register-title">Request a student account</h1>
+  <p class="muted">Enter the details shown on your StudentVerifi record. An administrator will review your request before your account is activated.</p>
   <form method="post" class="form-stack">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label for="matric_no">Matriculation number</label>
     <input id="matric_no" name="matric_no" required autocomplete="username" autocapitalize="characters">
-    <label for="email">Email address</label>
-    <input id="email" name="email" type="email" required autocomplete="email">
-    <label for="claim_code">Registration code</label>
-    <input id="claim_code" name="claim_code" required autocomplete="one-time-code" aria-describedby="registration-code-help">
-    <p class="fine-print" id="registration-code-help">If you need a registration code, contact the appropriate university office for assistance.</p>
+    <label for="full_name">Full name as recorded</label>
+    <input id="full_name" name="full_name" required autocomplete="name">
+    <label for="department">Department</label>
+    <input id="department" name="department" required autocomplete="organization-title">
+    <label for="level">Level</label>
+    <input id="level" name="level" required placeholder="e.g. 200" inputmode="numeric">
     <label for="password">Create password</label>
     <input id="password" name="password" type="password" minlength="10" required autocomplete="new-password" aria-describedby="password-help">
     <p class="fine-print" id="password-help">Use at least 10 characters.</p>
     <label for="confirm_password">Confirm password</label>
     <input id="confirm_password" name="confirm_password" type="password" minlength="10" required autocomplete="new-password">
-    <button class="btn primary full" type="submit">Create account</button>
+    <button class="btn primary full" type="submit">Submit account request</button>
   </form>
-  <p class="muted">Already registered? <a href="{{ url_for('login') }}">Sign in</a>.</p>
+  <p class="fine-print">This academic prototype uses sample records. Matching details does not by itself prove identity; account requests require administrator review.</p>
+  <p class="muted">Already have an account? <a href="{{ url_for('login') }}">Sign in</a>.</p>
 </section>
 {% endblock %}
