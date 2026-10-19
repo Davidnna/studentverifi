@@ -56,3 +56,8 @@ The application name is StudentVerifi. The institution subtitle remains Ebonyi S
 The public interface includes Home, About, How it works, FAQ, Privacy, and Contact pages. These pages are informational and do not expose student records or operational verification tools. Sign-in is labelled neutrally in the public navigation.
 
 Accessibility and responsive design include semantic page structure, a skip link, visible keyboard focus, scalable headings, responsive layouts, accessible status messages, and reduced-motion support. Please still test with keyboard navigation, a screen reader, and small-screen devices before presenting the prototype.
+
+
+## Synthetic records and CSV import
+
+Use Students → Add sample test records to create five fictional examples, or download the CSV template from Students → Import CSV. CSV imports are limited to 2 MB, validate required fields, email format, duplicate rows, and existing matriculation numbers, and reject the whole file when validation errors occur. Manual and CSV-created records are marked synthetic. Do not represent them as official EBSU records. This release does not implement student self-service claims, facial recognition, liveness detection, or official-data integrations; these require separate privacy review, design, and testing.

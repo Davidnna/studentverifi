@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}Import Students · StudentVerifi{% endblock %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow">BULK RECORD ENTRY</span><h1>Import student records</h1><p class="muted">Upload a UTF-8 CSV file to register multiple test records.</p></div><a class="btn secondary" href="{{ url_for('students') }}">Back to students</a></div>
+<section class="panel form-panel"><h2>1. Download the CSV template</h2><p>Required: matric_no, full_name, department, level. Optional: email, status.</p><p><a class="btn secondary" href="{{ url_for('student_import_template') }}">Download CSV template</a></p><div class="notice" role="note">Only upload records you are authorized to use. This prototype marks imported rows as synthetic test data. Duplicate matriculation numbers or invalid rows cancel the entire import.</div><h2>2. Choose your CSV file</h2><form method="post" enctype="multipart/form-data" class="form-stack"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label for="file">CSV file *</label><input id="file" name="file" type="file" accept=".csv,text/csv" required><p class="muted">Maximum size: 2 MB.</p><div class="actions"><button class="btn primary" type="submit">Validate and import</button><a class="btn secondary" href="{{ url_for('students') }}">Cancel</a></div></form></section>
+{% endblock %}

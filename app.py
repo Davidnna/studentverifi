@@ -1,5 +1,6 @@
 import os
 import io
+import csv
 import secrets
 import re
 import tempfile
@@ -127,6 +128,7 @@ def init_db():
             photo_url VARCHAR(1000),
             token VARCHAR(128) UNIQUE NOT NULL,
             status VARCHAR(20) NOT NULL DEFAULT 'Active',
+            record_source VARCHAR(30) NOT NULL DEFAULT 'synthetic',
             created_at VARCHAR(40) NOT NULL,
             INDEX idx_students_full_name (full_name),
             INDEX idx_students_department (department)
@@ -146,7 +148,10 @@ def init_db():
     with engine.begin() as connection:
         for statement in statements:
             connection.execute(text(statement))
-        existing = connection.execute(text("SELECT id FROM users WHERE username = :username"), {"username": "admin"}).first()
+        student_columns = {row[0] for row in connection.execute(text("SHOW COLUMNS FROM students")).fetchall()}
+        if "record_source" not in student_columns:
+            connection.execute(text("ALTER TABLE students ADD COLUMN record_source VARCHAR(30) NOT NULL DEFAULT 'synthetic'"))
+        existing = connection.execute(text("SELECT id FROM users WHERE username = :username"), {"username": os.environ.get("INITIAL_ADMIN_USERNAME", "admin")}).first()
         if not existing:
             # Set INITIAL_ADMIN_PASSWORD in Railway variables before first deploy.
             initial_password = os.environ.get("INITIAL_ADMIN_PASSWORD")
@@ -291,8 +296,8 @@ def add_student():
             with get_db() as db:
                 db.execute("""
                     INSERT INTO students
-                    (matric_no, full_name, department, level, email, photo_url, token, status, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', ?)
+                    (matric_no, full_name, department, level, email, photo_url, token, status, record_source, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', 'synthetic', ?)
                 """, (matric_no, full_name, department, level, email, photo_url, token, now()))
                 student_id = db.execute("SELECT id FROM students WHERE token = ?", (token,)).fetchone()["id"]
             flash("Student registered successfully.", "success")
@@ -300,6 +305,88 @@ def add_student():
         except IntegrityError:
             flash("That matriculation number is already registered.", "danger")
     return render_template("student_form.html", student=None)
+
+
+@app.route("/students/import-template.csv")
+@login_required
+def student_import_template():
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["matric_no", "full_name", "department", "level", "email", "status"])
+    writer.writerow(["TEST/CSC/001", "Ada Example", "Computer Science", "400", "ada.example@example.com", "Active"])
+    return send_file(io.BytesIO(output.getvalue().encode("utf-8-sig")), mimetype="text/csv", as_attachment=True, download_name="studentverifi-student-template.csv")
+
+
+@app.route("/students/import", methods=["GET", "POST"])
+@login_required
+def import_students():
+    if request.method == "GET":
+        return render_template("student_import.html")
+    upload = request.files.get("file")
+    if not upload or not upload.filename or not upload.filename.lower().endswith(".csv"):
+        flash("Choose a CSV file to import.", "danger")
+        return redirect(url_for("import_students"))
+    raw = upload.stream.read(2 * 1024 * 1024 + 1)
+    if len(raw) > 2 * 1024 * 1024:
+        flash("The CSV file is too large. Maximum size is 2 MB.", "danger")
+        return redirect(url_for("import_students"))
+    try:
+        reader = csv.DictReader(io.StringIO(raw.decode("utf-8-sig")))
+        required = {"matric_no", "full_name", "department", "level"}
+        headers = {h.strip().lower() for h in (reader.fieldnames or []) if h}
+        if not required.issubset(headers):
+            flash("Required CSV columns: matric_no, full_name, department, level. Optional: email, status.", "danger")
+            return redirect(url_for("import_students"))
+        rows, errors, seen = [], [], set()
+        for line, source in enumerate(reader, 2):
+            row = {(k or "").strip().lower(): (v or "").strip() for k, v in source.items() if k}
+            matric = row.get("matric_no", "").upper(); name = row.get("full_name", "")
+            dept = row.get("department", ""); level = row.get("level", ""); email = row.get("email", "")
+            status = (row.get("status") or "Active").capitalize()
+            if not any([matric,name,dept,level,email]): continue
+            if not all([matric,name,dept,level]): errors.append(f"Row {line}: required field missing."); continue
+            if len(matric)>100 or len(name)>200 or len(dept)>200 or len(level)>50 or len(email)>254: errors.append(f"Row {line}: field too long."); continue
+            if email and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email): errors.append(f"Row {line}: invalid email."); continue
+            if status not in {"Active","Inactive"}: errors.append(f"Row {line}: status must be Active or Inactive."); continue
+            if matric in seen: errors.append(f"Row {line}: duplicate matric number {matric} in file."); continue
+            seen.add(matric); rows.append((matric,name,dept,level,email or None,status))
+        if errors:
+            for error in errors[:8]: flash(error,"danger")
+            if len(errors)>8: flash(f"{len(errors)-8} additional errors found.","danger")
+            return redirect(url_for("import_students"))
+        if not rows: flash("No student rows found in the CSV.","warning"); return redirect(url_for("import_students"))
+        with get_db() as db:
+            existing = [r[0] for r in rows if db.execute("SELECT id FROM students WHERE matric_no = ?", (r[0],)).fetchone()]
+            if existing:
+                flash("Import cancelled; matriculation number(s) already exist: " + ", ".join(existing[:8]), "danger")
+                return redirect(url_for("import_students"))
+            for row in rows:
+                db.execute("""INSERT INTO students (matric_no,full_name,department,level,email,photo_url,token,status,record_source,created_at)
+                    VALUES (?, ?, ?, ?, ?, NULL, ?, ?, 'synthetic', ?)""", (row[0],row[1],row[2],row[3],row[4],secrets.token_urlsafe(32),row[5],now()))
+        flash(f"Imported {len(rows)} fictional test student record(s).", "success")
+        return redirect(url_for("students"))
+    except (UnicodeDecodeError, csv.Error):
+        flash("Could not read this CSV. Save it as UTF-8 CSV and try again.", "danger")
+        return redirect(url_for("import_students"))
+
+
+@app.route("/students/synthetic-demo", methods=["POST"])
+@login_required
+def create_synthetic_demo():
+    samples = [
+      ("TEST/CSC/001","Ada Example","Computer Science","400","ada.example@example.com"),
+      ("TEST/CSC/002","Chidi Sample","Computer Science","300","chidi.sample@example.com"),
+      ("TEST/SCI/003","Nneka Demo","Biochemistry","200","nneka.demo@example.com"),
+      ("TEST/ENG/004","Obinna Sample","Electrical Engineering","400","obinna.sample@example.com"),
+      ("TEST/ART/005","Amara Demo","English and Literary Studies","100","amara.demo@example.com")]
+    created=0
+    with get_db() as db:
+      for matric,name,dept,level,email in samples:
+        if db.execute("SELECT id FROM students WHERE matric_no = ?",(matric,)).fetchone(): continue
+        db.execute("""INSERT INTO students (matric_no,full_name,department,level,email,photo_url,token,status,record_source,created_at)
+          VALUES (?, ?, ?, ?, ?, NULL, ?, 'Active', 'synthetic', ?)""",(matric,name,dept,level,email,secrets.token_urlsafe(32),now())); created+=1
+    flash(f"Added {created} fictional test record(s). These are not official EBSU records.","success" if created else "warning")
+    return redirect(url_for("students"))
 
 
 @app.route("/students/<int:student_id>")

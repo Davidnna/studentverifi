@@ -1,10 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Students{% endblock %}
 {% block content %}
-<div class="page-heading"><div><span class="eyebrow">RECORDS</span><h1>Students</h1><p class="muted">Search and manage registered student identities.</p></div><a class="btn primary" href="{{ url_for('add_student') }}">+ Register student</a></div>
+<div class="page-heading"><div><span class="eyebrow">RECORDS</span><h1>Students</h1><p class="muted">Search and manage registered student identities.</p></div><div class="actions"><a class="btn secondary" href="{{ url_for('import_students') }}">Import CSV</a><a class="btn primary" href="{{ url_for('add_student') }}">+ Register student</a></div></div>
+<div class="notice" role="note">Synthetic records are fictional test data, not official EBSU records. Use official records only after authorization.</div>
+<form class="actions" method="post" action="{{ url_for('create_synthetic_demo') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn secondary" type="submit">Add sample test records</button></form>
 <form class="searchbar" method="get"><input name="q" value="{{ q }}" placeholder="Search name, matric number or department"><button class="btn secondary" type="submit">Search</button></form>
-<div class="panel table-wrap"><table><thead><tr><th>Matric number</th><th>Full name</th><th>Department</th><th>Level</th><th>Status</th><th></th></tr></thead><tbody>
-{% for s in students %}<tr><td><strong>{{ s.matric_no }}</strong></td><td>{{ s.full_name }}</td><td>{{ s.department }}</td><td>{{ s.level }}</td><td><span class="pill {{ s.status|lower }}">{{ s.status }}</span></td><td><a class="table-link" href="{{ url_for('student_detail', student_id=s.id) }}">View →</a></td></tr>
-{% else %}<tr><td colspan="6" class="empty">No student records found. Register your first test student.</td></tr>{% endfor %}
+<div class="panel table-wrap"><table><thead><tr><th>Matric number</th><th>Full name</th><th>Department</th><th>Level</th><th>Status</th><th>Data source</th><th></th></tr></thead><tbody>
+{% for s in students %}<tr><td><strong>{{ s.matric_no }}</strong></td><td>{{ s.full_name }}</td><td>{{ s.department }}</td><td>{{ s.level }}</td><td><span class="pill {{ s.status|lower }}">{{ s.status }}</span></td><td><span class="pill">{{ s.record_source|default('synthetic')|title }}</span></td><td><a class="table-link" href="{{ url_for('student_detail', student_id=s.id) }}">View →</a></td></tr>
+{% else %}<tr><td colspan="7" class="empty">No student records found. Register your first test student.</td></tr>{% endfor %}
 </tbody></table></div>
 {% endblock %}
