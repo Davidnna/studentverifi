@@ -1,1 +1,21 @@
-{% extends "base.html" %}{% block title %}Student account · StudentVerifi{% endblock %}{% block content %}<section class="panel"><h1>Welcome, {{ student.full_name }}</h1><p>Your account is linked to an existing StudentVerifi record.</p><dl class="details"><dt>Matriculation number</dt><dd>{{ student.matric_no }}</dd><dt>Department</dt><dd>{{ student.department }}</dd><dt>Level</dt><dd>{{ student.level }}</dd><dt>Status</dt><dd>{{ student.status }}</dd></dl><p class="notice">This prototype does not yet implement facial recognition or student QR downloads.</p></section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Student account · StudentVerifi{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>Welcome, {{ student.full_name }}</h1>
+  <p>Your account is linked to a StudentVerifi record.</p>
+  <dl class="details">
+    <dt>Matriculation number</dt><dd>{{ student.matric_no }}</dd>
+    <dt>Faculty</dt><dd>{{ student.faculty }}</dd>
+    <dt>Department</dt><dd>{{ student.department }}</dd>
+    <dt>Level</dt><dd>{{ student.level }}</dd>
+    <dt>Status</dt><dd>{{ student.status }}</dd>
+  </dl>
+  <div class="qr-panel">
+    <h2>Your student QR code</h2>
+    <p class="muted">Present this code to an authorised verifier. Keep it private because it is linked to your student record.</p>
+    <img class="qr-large" src="{{ url_for('student_qr_self') }}" alt="Your StudentVerifi QR code">
+    <a class="btn primary" href="{{ url_for('student_qr_self') }}">Download my QR code</a>
+  </div>
+</section>
+{% endblock %}

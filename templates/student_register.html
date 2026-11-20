@@ -7,13 +7,32 @@
   <form method="post" class="form-stack">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label for="matric_no">Matriculation number</label>
-    <input id="matric_no" name="matric_no" required autocomplete="username" autocapitalize="characters">
-    <label for="full_name">Full name as recorded</label>
-    <input id="full_name" name="full_name" required autocomplete="name">
-    <label for="department">Department</label>
-    <input id="department" name="department" required autocomplete="organization-title">
+    <input id="matric_no" name="matric_no" required maxlength="40" autocomplete="username" autocapitalize="characters">
+    <label for="first_name">First name</label>
+    <input id="first_name" name="first_name" required maxlength="100" autocomplete="given-name">
+    <label for="middle_name">Middle name (if applicable)</label>
+    <input id="middle_name" name="middle_name" maxlength="100" autocomplete="additional-name">
+    <label for="last_name">Surname</label>
+    <input id="last_name" name="last_name" required maxlength="100" autocomplete="family-name">
+    <label for="faculty_id">Faculty</label>
+    <select id="faculty_id" name="faculty_id" required>
+      <option value="">Select faculty</option>
+      {% for faculty in faculties %}<option value="{{ faculty.id }}">{{ faculty.name }}</option>{% endfor %}
+    </select>
+    <label for="department_id">Department</label>
+    <select id="department_id" name="department_id" required disabled>
+      <option value="">Select faculty first</option>
+      {% for department in departments %}
+        <option value="{{ department.id }}" data-faculty-id="{{ department.faculty_id }}">{{ department.name }}</option>
+      {% endfor %}
+    </select>
     <label for="level">Level</label>
-    <input id="level" name="level" required placeholder="e.g. 200" inputmode="numeric">
+    <select id="level" name="level" required>
+      <option value="">Select level</option>
+      {% for level in ["100", "200", "300", "400", "500", "600", "Postgraduate"] %}
+        <option value="{{ level }}">{{ level }}{% if level != "Postgraduate" %} Level{% endif %}</option>
+      {% endfor %}
+    </select>
     <label for="password">Create password</label>
     <input id="password" name="password" type="password" minlength="10" required autocomplete="new-password" aria-describedby="password-help">
     <p class="fine-print" id="password-help">Use at least 10 characters.</p>
@@ -21,7 +40,28 @@
     <input id="confirm_password" name="confirm_password" type="password" minlength="10" required autocomplete="new-password">
     <button class="btn primary full" type="submit">Submit account request</button>
   </form>
-  <p class="fine-print">This academic prototype uses sample records. Matching details does not by itself prove identity; account requests require administrator review.</p>
+  <p class="fine-print">Matching details does not by itself prove identity. Account requests require administrator review.</p>
   <p class="muted">Already have an account? <a href="{{ url_for('login') }}">Sign in</a>.</p>
 </section>
+<script>
+(function () {
+  const facultySelect = document.getElementById("faculty_id");
+  const departmentSelect = document.getElementById("department_id");
+  const options = Array.from(departmentSelect.options).filter(option => option.dataset.facultyId);
+
+  function updateDepartments() {
+    const facultyId = facultySelect.value;
+    departmentSelect.value = "";
+    departmentSelect.disabled = !facultyId;
+    options.forEach(option => {
+      option.hidden = option.dataset.facultyId !== facultyId;
+      option.disabled = option.dataset.facultyId !== facultyId;
+    });
+    departmentSelect.options[0].textContent = facultyId ? "Select department" : "Select faculty first";
+  }
+
+  facultySelect.addEventListener("change", updateDepartments);
+  updateDepartments();
+})();
+</script>
 {% endblock %}
