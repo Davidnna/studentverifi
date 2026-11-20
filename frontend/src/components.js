@@ -655,9 +655,32 @@ function DashboardShell() {
     );
 }
 
+const workspaceRoutes = [
+    '/dashboard',
+    '/students',
+    '/verify',
+    '/registration-requests',
+    '/logs',
+    '/admin-audit',
+    '/student/account',
+    '/account/password'
+];
+
+function isWorkspaceRoute(pathname) {
+    const normalizedPath = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+
+    return workspaceRoutes.some((path) =>
+        normalizedPath === path ||
+        (path === '/students' && normalizedPath.startsWith('/students/'))
+    );
+}
+
 export function AppShell() {
     const { user } = useAuth();
-    return user ? h(DashboardShell) : h(PublicShell);
+    const location = useLocation();
+    const isWorkspace = isWorkspaceRoute(location.pathname);
+
+    return user && isWorkspace ? h(DashboardShell) : h(PublicShell);
 }
 
 export function Protected({ role }) {

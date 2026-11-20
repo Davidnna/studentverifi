@@ -122,6 +122,22 @@ class SourceContractTests(unittest.TestCase):
         self.assertIn("prefers-reduced-motion", css)
         self.assertIn(":focus-visible", css)
 
+    def test_public_and_workspace_shells_are_route_specific(self):
+        ui = self.text("frontend/src/components.js")
+        css = self.text("frontend/src/style.css")
+        self.assertIn("function isWorkspaceRoute(pathname)", ui)
+        self.assertIn("const isWorkspace = isWorkspaceRoute(location.pathname)", ui)
+        self.assertIn("return user && isWorkspace ? h(DashboardShell) : h(PublicShell)", ui)
+        for path in ("'/dashboard'", "'/students'", "'/verify'", "'/registration-requests'",
+                     "'/admin-audit'", "'/student/account'", "'/account/password'"):
+            self.assertIn(path, ui)
+        self.assertIn("pathname.startsWith('/students/')", ui)
+        self.assertIn("pathname.replace(/\\/+$/, '')", ui)
+        self.assertIn("scrollbar-width: thin", css)
+        self.assertIn("scrollbar-color:", css)
+        self.assertIn(".sidebar-navigation::-webkit-scrollbar", css)
+        self.assertIn(".sidebar-navigation::-webkit-scrollbar-thumb:active", css)
+
     def test_registration_request_history_includes_decisions(self):
         api = self.text("spa_api.py")
         pages = self.text("frontend/src/pages.js")

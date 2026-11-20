@@ -43,7 +43,7 @@ A successful QR scan confirms that a credential matches a current record. It doe
 - Database access: SQLAlchemy and Psycopg 3.
 - Deployment: Vercel, with GitHub Actions compiling React into the `public/` directory before Vercel packages Flask.
 
-The signed-in administrator workspace uses a persistent left sidebar, an expanded operational dashboard and client-side React Router navigation. Verification history is consolidated with the scanner, while account requests retain their approval and rejection history. A route-level error boundary prevents unexpected page-rendering errors from leaving the workspace blank. The React API client obtains a CSRF token before state-changing requests and refreshes an expired token once before retrying. Server-side CSRF protection remains enabled.
+The public homepage and information pages always use the public header and footer, including when a user is signed in; signed-in visitors receive an Open workspace link. The left sidebar is restricted to authenticated workspace routes. The workspace navigation uses a slim, styled scrollbar while retaining keyboard and touch scrolling. The signed-in administrator workspace uses a persistent left sidebar, an expanded operational dashboard and client-side React Router navigation. Verification history is consolidated with the scanner, while account requests retain their approval and rejection history. A route-level error boundary prevents unexpected page-rendering errors from leaving the workspace blank. The React API client obtains a CSRF token before state-changing requests and refreshes an expired token once before retrying. Server-side CSRF protection remains enabled.
 
 ## Run locally
 
