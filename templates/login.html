@@ -9,9 +9,9 @@
     <form method="post" class="form-stack">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label for="username">Username</label>
-      <input id="username" name="username" autocomplete="username" required>
+      <input id="username" name="username" autocomplete="username" maxlength="100" required>
       <label for="password">Password</label>
-      <input id="password" type="password" name="password" autocomplete="current-password" required>
+      <input id="password" type="password" name="password" autocomplete="current-password" maxlength="128" required>
       <button class="btn primary full" type="submit">Sign in</button>
     </form>
     <p class="muted">New to StudentVerifi? <a href="{{ url_for('student_register') }}">Create your student account</a>.</p>

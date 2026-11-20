@@ -24,9 +24,12 @@
       <a href="{{ url_for('verify') }}">Verify ID</a>
       <a href="{{ url_for('registration_requests') }}">Registration requests</a>
       <a href="{{ url_for('logs') }}">Verification logs</a>
+      <a href="{{ url_for('admin_audit') }}">Admin audit</a>
+      <a href="{{ url_for('change_password') }}">Change password</a>
       <form class="inline" method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="nav-button" type="submit">Log out</button></form>
     {% elif session.get('user_id') and session.get('role') == 'student' %}
       <a href="{{ url_for('student_account') }}">My account</a>
+      <a href="{{ url_for('change_password') }}">Change password</a>
       <form class="inline" method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="nav-button" type="submit">Log out</button></form>
     {% else %}
       <a href="{{ url_for('index') }}">Home</a>

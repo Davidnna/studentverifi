@@ -9,7 +9,9 @@
   <dt>First name</dt><dd>{{ student.first_name }}</dd><dt>Middle name</dt><dd>{{ student.middle_name or '—' }}</dd><dt>Surname</dt><dd>{{ student.last_name }}</dd>
   <dt>Faculty</dt><dd>{{ student.faculty }}</dd><dt>Department</dt><dd>{{ student.department }}</dd><dt>Level</dt><dd>{{ student.level }}</dd></dl>
 </section><section class="panel qr-panel"><span class="eyebrow">PERSONAL QR CREDENTIAL</span><h2>Your QR code</h2>
+{% if student.status == 'Active' %}
 <img class="qr-large" src="{{ url_for('own_student_qr') }}" alt="Your student verification QR code">
 <a class="btn primary full" href="{{ url_for('own_student_qr', download=1) }}">Download QR PNG</a>
 <p class="notice">Keep your QR code private. A QR code identifies a record, not the person holding the code. Authorised staff must compare your identity with approved evidence.</p>
+{% else %}<p class="notice">Your student record is inactive. Your QR credential is unavailable while the record remains inactive. Contact the administrator if you believe this is incorrect.</p>{% endif %}
 </section></div>{% endblock %}

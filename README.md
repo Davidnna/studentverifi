@@ -1,56 +1,35 @@
 # StudentVerifi — Neon PostgreSQL edition
 
-A web-based academic prototype for QR-code-assisted student identity verification
-at Ebonyi State University (EBSU). Built with Flask, SQLAlchemy, Psycopg 3,
-Neon PostgreSQL, and Vercel. **Not an official EBSU service.**
+A web-based academic prototype for QR-code-assisted student identity verification at Ebonyi State University (EBSU). Built with Flask, SQLAlchemy, Psycopg 3, Neon PostgreSQL and Vercel. **It is not an official EBSU service.**
 
-## Online-only deployment (no local Python installation)
+## Online-only deployment
 
-Follow **[ONLINE_DEPLOYMENT.md](ONLINE_DEPLOYMENT.md)**. It covers uploading the
-extracted **contents** of this complete project ZIP to the existing GitHub
-repository, adding Vercel environment variables, deploying, inspecting `/health`,
-visiting the private `/setup` page once, and removing the setup token afterwards.
+Use `ONLINE_DEPLOYMENT.md`. The project is designed for GitHub + Vercel + Neon; local execution is optional and is not required for the intended deployment workflow. Upload the extracted contents of this ZIP to the root of the existing GitHub repository, not the ZIP as one file.
 
-A ZIP committed as a single file **will not deploy the Flask source**. GitHub
-must contain the project files (`app.py`, `academic_catalogue.py`,
-`requirements.txt`, `vercel.json`, `templates/`, `static/`, etc.) at the repository
-root. No commands on your computer are necessary.
+## Main capabilities
 
-## Features
+- 10 faculties and 59 departments in the bundled academic catalogue.
+- Separate first, middle and surname fields.
+- Configurable matriculation-number structural validation; the default pattern is not an official EBSU validation specification.
+- UTF-8 CSV import (up to 8 MB) with duplicate checks and all-or-nothing transaction behaviour.
+- Administrator and student authentication with role-separated access.
+- Private one-time claim codes for student account requests, with administrator approval.
+- Unique opaque QR tokens, camera scanning, manual verification, verification history and QR rotation.
+- Neon PostgreSQL schema initialisation through the protected browser setup route.
+- Lazy additive security migration after deployment; no database I/O during Flask module import.
+- Login rate limiting, CSRF protection, session limits, security headers and no-store responses.
+- Administrator audit trail for record creation/import, status changes, claim-code issuance, QR rotation, account approvals, password changes and synthetic-data cleanup.
+- Administrator-only preview and removal of the exact synthetic `DEMO/2026/NNNNNN` test dataset.
 
-- 10 faculties and 59 departments from the [published EBSU faculties page](https://ebsu.edu.ng/faculties/).
-- Academic catalogue aliases for ordinary spelling variations; unrecognised or
-  ambiguous academic units are rejected rather than guessed.
-- Separate first, middle and surname fields, with a computed full-name view.
-- Configurable matriculation number validation. The default verifies structure
-  only; it is **not** an official EBSU matriculation-format specification.
-- Manual student registration and UTF-8 CSV import (up to 8 MB). Supports the
-  new separated names and legacy `full_name` CSVs; 2,500-row datasets are
-  supported in principle, subject to actual file validation and server limits.
-- Admin/student authentication and administrator approval of student requests.
-- Token-based student QR images, camera scanner, verification audit logs and
-  dashboard. A QR token alone is not proof of the holder's identity.
-- PostgreSQL schema creation through explicitly protected browser setup or
-  `flask init-db` command. **No database initialization during import**.
-- `/health` checks connectivity and whether initial database tables exist.
+## Important operational points
 
-## Important safeguards
+- Keep secrets in Vercel environment variables; never commit `.env` or secret values.
+- The production environment should have `DATABASE_URL`, `SECRET_KEY`, `INITIAL_ADMIN_USERNAME`, `INITIAL_ADMIN_PASSWORD`, `COOKIE_SECURE=true` and `FLASK_DEBUG=false`.
+- `SETUP_TOKEN` is needed only for one-time initialisation of a new database. The route automatically returns 404 after an administrator and core schema exist. Remove the token after initialisation.
+- On the first administrator sign-in after this security update, the application applies additive security migrations, including rate-limit storage and verification-token redaction.
+- Before importing genuine records, use Students → synthetic-data cleanup and confirm that only the generated `DEMO/2026/NNNNNN` rows are selected. The cleanup action is not automatic.
+- Only process student records and photographs with proper institutional authorisation. The project remains an academic prototype until the university approves its use and operating procedures.
 
-Keep all environment secrets in Vercel (not source control). Use an SSL-enabled,
-pooled Neon `DATABASE_URL`. Remove `SETUP_TOKEN` after setup. Only import student
-records you have permission to process. Do not assume uploaded records are
-university-verified. Do not run setup against an existing production database
-without first inspecting its schema and taking a backup; this release assumes
-new, empty PostgreSQL tables.
+## Testing and limitations
 
-## Local development (optional only)
-
-```bash
-pip install -r requirements.txt
-# Configure a .env with your own PostgreSQL DATABASE_URL and secrets.
-python -m flask --app app init-db
-python app.py
-```
-
-Vercel does not run the optional CLI. The browser-based `/setup` route is the
-recommended option for this project.
+The included `tests/` directory contains Flask unit/smoke tests. A GitHub Actions workflow runs them automatically on pushes to `main`/`master` and on pull requests; Vercel deployment itself does not run these tests. Package preparation also checks Python syntax, Jinja template parsing, CSRF form coverage, endpoint references and catalogue consistency. The packaging environment did not permit installing missing Flask/Werkzeug/Flask-WTF/Psycopg packages, so the full Flask test-client suite and live Neon/Vercel integration could not be run before delivery. See `SECURITY_AUDIT.md` for scope and remaining production controls.

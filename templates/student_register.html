@@ -10,11 +10,11 @@
 <label>Surname *<input name="last_name" required maxlength="100" value="{{ request.form.get('last_name', '') }}"></label>
 {% include "_academic_selects.html" %}
 <label>Level *<select name="level" required><option value="">Select level</option>{% for value in ['100','200','300','400','500','600','Postgraduate'] %}<option value="{{ value }}" {% if request.form.get('level') == value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select></label>
-<label>Claim code (only if administrator issued one)<input name="claim_code" autocomplete="off" placeholder="Private one-time code"></label>
-<label>Create password *<input type="password" name="password" minlength="10" required autocomplete="new-password"></label>
-<label>Confirm password *<input type="password" name="confirm_password" minlength="10" required autocomplete="new-password"></label>
+<label>Private one-time claim code *<input name="claim_code" autocomplete="off" required minlength="16" maxlength="128" placeholder="Enter the code provided privately by the administrator"></label>
+<label>Create password *<input type="password" name="password" minlength="10" maxlength="128" required autocomplete="new-password"></label>
+<label>Confirm password *<input type="password" name="confirm_password" minlength="10" maxlength="128" required autocomplete="new-password"></label>
 <button class="btn primary full" type="submit">Submit account request</button>
 </form>
-<p class="fine-print">This is an academic prototype, not an official university identity service. Matching academic details does not itself establish identity.</p>
+<p class="fine-print">A private one-time claim code issued by an administrator is required. Matching academic details alone does not establish identity. This is an academic prototype, not an official university identity service.</p>
 <p class="muted">Already registered? <a href="{{ url_for('login') }}">Sign in</a>.</p>
 </section>{% endblock %}

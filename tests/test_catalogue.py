@@ -1,4 +1,4 @@
-"""No database required: university catalogue and name/department aliases."""
+"""No-database academic catalogue and alias tests."""
 import unittest
 from academic_catalogue import academic_catalogue_counts, resolve_department, resolve_faculty
 
