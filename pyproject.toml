@@ -1,0 +1,19 @@
+[project]
+name = "studentverifi"
+version = "2.2.0"
+description = "React student identity verification with hardened Flask and PostgreSQL"
+requires-python = ">=3.12,<3.15"
+dependencies = [
+    "Flask>=3.1,<4.0",
+    "SQLAlchemy>=2.0,<3.0",
+    "psycopg[binary]>=3.2,<4.0",
+    "qrcode[pil]>=7.4,<9.0",
+    "python-dotenv>=1.0,<2.0",
+    "Flask-WTF>=1.2,<2.0",
+]
+
+[tool.vercel]
+entrypoint = "app:app"
+
+[tool.vercel.scripts]
+build = "python build.py"

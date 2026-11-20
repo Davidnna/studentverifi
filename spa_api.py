@@ -43,7 +43,7 @@ def install(app, backend):
     def unavailable(error):
         return err('The service is temporarily unavailable.', 503)
     root = Path(app.root_path) / 'public'
-    client_routes = {'/', '/login', '/register', '/dashboard', '/students', '/students/new', '/students/import', '/students/demo-cleanup', '/verify', '/registration-requests', '/logs', '/admin-audit', '/account/password', '/student/account', '/how-it-works', '/about', '/faq', '/privacy', '/contact'}
+    client_routes = {'/', '/index.html', '/login', '/register', '/dashboard', '/students', '/students/new', '/students/import', '/students/demo-cleanup', '/verify', '/registration-requests', '/logs', '/admin-audit', '/account/password', '/student/account', '/how-it-works', '/about', '/faq', '/privacy', '/contact'}
 
     @app.before_request
     def react_routes():

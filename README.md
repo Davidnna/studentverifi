@@ -31,7 +31,7 @@ The React application uses same-origin `/api/*` endpoints and secure, HTTP-only 
 
 ## Deploy to Vercel
 
-Vercel detects the Flask application. The `vercel.json` build command installs Node dependencies and builds React into `public/` during deployment. Keep your existing `DATABASE_URL`, `SECRET_KEY`, `INITIAL_ADMIN_USERNAME` and `INITIAL_ADMIN_PASSWORD` values. Set `COOKIE_SECURE=true` and `FLASK_DEBUG=false`. Do not reintroduce `SETUP_TOKEN` to an already initialised system.
+Vercel detects the Flask application via `app.py` and `pyproject.toml`. The Flask deployment explicitly runs `python build.py` using Vercel's supported build hook. The script installs the required Node dependencies, compiles React with Vite, and verifies that `public/index.html` and JavaScript assets exist before deployment. Vercel serves the resulting `public/` assets from its CDN. A missing or failed frontend build stops deployment instead of showing a blank site or a 503 error. Keep your existing `DATABASE_URL`, `SECRET_KEY`, `INITIAL_ADMIN_USERNAME` and `INITIAL_ADMIN_PASSWORD` values. Set `COOKIE_SECURE=true` and `FLASK_DEBUG=false`. Do not reintroduce `SETUP_TOKEN` to an already initialised system.
 
 Deploy first to a preview environment using an isolated Neon branch. Check the Vercel build log contains a successful Vite build and that `public/index.html` is generated. Verify administrator sign-in, direct navigation to `/dashboard`, mobile scanner behaviour, student management, claim codes, QR rotation and audit logs before promoting to production. The `GET /health` endpoint returns only a minimal service status.
 
@@ -40,6 +40,12 @@ The build must fail rather than silently serve the legacy Flask pages. The legac
 ## Security and responsible use
 
 Use only authorised student records. Protect claim codes and QR credentials, use staff accounts with suitable permissions, maintain database backups, and perform accessibility and security testing before institutional deployment. A valid QR credential confirms a database record, not the physical identity of its holder; staff must verify the person's identity independently.
+
+## Troubleshooting production builds
+
+If Vercel reports that `React build missing` or cannot serve `/index.html`, inspect the **deployment build log**, not runtime logs. Confirm the log includes `StudentVerifi React build ready`. If it does not, open **Vercel → Project Settings → Build and Deployment** and remove any old manual Build Command override that bypasses `python build.py`; ensure the project root is the repository root. Vercel's Python build hook must run during the deployment. You do not need to run commands on your own machine for a Vercel deployment.
+
+A successful Vercel deployment does not by itself prove administrator login or live Neon access. Test these separately in the preview deployment before promoting to production.
 
 ## Checks
 

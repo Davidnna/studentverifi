@@ -52,7 +52,10 @@ class SourceContractTests(unittest.TestCase):
         package = json.loads(self.text("package.json"))
         config = json.loads(self.text("vercel.json"))
         self.assertIn("vite build", package["scripts"]["build"])
-        self.assertIn("npm run build", config["buildCommand"])
+        self.assertEqual(config["buildCommand"], "python build.py")
+        self.assertIn('build = "python build.py"', self.text("pyproject.toml"))
+        self.assertIn('[tool.vercel.scripts]', self.text("pyproject.toml"))
+        self.assertIn('subprocess.run(["npm", "run", "build"]', self.text("build.py"))
         self.assertEqual(config["framework"], "flask")
         self.assertIn({"source": "/dashboard", "destination": "/index.html"},
                       config["rewrites"])

@@ -16,7 +16,7 @@ jobs:
             - name: Install Python dependencies
               run: python -m pip install -r requirements.txt
             - name: Build React
-              run: npm install --include=dev --no-audit --no-fund && npm run build && npm run check
+              run: python build.py && npm run check
             - name: Run regression tests
               env:
                   SECRET_KEY: test-only-secret-of-at-least-thirty-two-characters
