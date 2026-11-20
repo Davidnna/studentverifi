@@ -48,17 +48,21 @@ class SourceContractTests(unittest.TestCase):
         self.assertNotIn("window.location.href", ui)
         self.assertNotIn("location.reload", ui)
 
-    def test_deployment_build_is_required(self):
+    def test_compiled_assets_are_published_with_source(self):
         package = json.loads(self.text("package.json"))
         config = json.loads(self.text("vercel.json"))
+        workflow = self.text(".github/workflows/verify.yml")
         self.assertIn("vite build", package["scripts"]["build"])
         self.assertEqual(config["buildCommand"], "python build.py")
-        self.assertIn('build = "python build.py"', self.text("pyproject.toml"))
         self.assertIn('[tool.vercel.scripts]', self.text("pyproject.toml"))
-        self.assertIn('subprocess.run(["npm", "run", "build"]', self.text("build.py"))
-        self.assertEqual(config["framework"], "flask")
-        self.assertIn({"source": "/dashboard", "destination": "/index.html"},
-                      config["rewrites"])
+        self.assertIn('build = "python build.py"', self.text("pyproject.toml"))
+        self.assertIn("npm run build", workflow)
+        self.assertIn("git add -f public/index.html", workflow)
+        self.assertIn("github.event_name == 'push'", workflow)
+        self.assertIn("contents: write", workflow)
+        self.assertNotIn("/public/", self.text(".gitignore"))
+        self.assertIn("verify_assets()", self.text("build.py"))
+        self.assertNotIn("subprocess.run", self.text("build.py"))
         self.assertNotIn("SETUP_TOKEN", self.text(".env.example"))
 
     def test_api_and_security_contract(self):

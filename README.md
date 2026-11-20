@@ -29,24 +29,32 @@ StudentVerifi is a QR-code-based student identity verification application for a
 
 The React application uses same-origin `/api/*` endpoints and secure, HTTP-only Flask session cookies. Its client routes are handled by React Router without full document reloads. The built frontend must exist in `public/` for single-server operation.
 
-## Deploy to Vercel
+## Deploy to Vercel (GitHub builds React first)
 
-Vercel detects the Flask application via `app.py` and `pyproject.toml`. The Flask deployment explicitly runs `python build.py` using Vercel's supported build hook. The script installs the required Node dependencies, compiles React with Vite, and verifies that `public/index.html` and JavaScript assets exist before deployment. Vercel serves the resulting `public/` assets from its CDN. A missing or failed frontend build stops deployment instead of showing a blank site or a 503 error. Keep your existing `DATABASE_URL`, `SECRET_KEY`, `INITIAL_ADMIN_USERNAME` and `INITIAL_ADMIN_PASSWORD` values. Set `COOKIE_SECURE=true` and `FLASK_DEBUG=false`. Do not reintroduce `SETUP_TOKEN` to an already initialised system.
+Vercel hosts the Flask API and serves compiled React files from its `public/` CDN directory. **There is no separate React server or production start command.** The source files under `frontend/` cannot be served directly as a production React app.
 
-Deploy first to a preview environment using an isolated Neon branch. Check the Vercel build log contains a successful Vite build and that `public/index.html` is generated. Verify administrator sign-in, direct navigation to `/dashboard`, mobile scanner behaviour, student management, claim codes, QR rotation and audit logs before promoting to production. The `GET /health` endpoint returns only a minimal service status.
+To avoid the missing-build errors previously seen on Vercel, GitHub Actions now compiles the frontend using Node 22 and commits the generated `public/index.html`, `public/assets/`, and branding assets back to the **same branch**. Vercel then redeploys from this commit, with assets present before its Flask builder runs. The Vercel build script only **verifies** the files exist; it does not attempt to install Node or build React inside the Python builder.
 
-The build must fail rather than silently serve the legacy Flask pages. The legacy server-rendered interface has been removed to avoid conflicting login and navigation behaviours.
+1. Extract this complete project and upload its contents to a GitHub **preview branch** of the StudentVerifi repository, replacing corresponding files. Preserve the `.github/workflows/` directory.
+2. In GitHub, open **Actions → Compile and verify StudentVerifi**. Confirm **Compile React into public/**, tests, and **Commit generated assets for Vercel** pass.
+3. Check the branch received the automatic commit `build: publish React assets for Vercel [skip ci]` and that `public/index.html` and `public/assets/` actually exist in the branch. This is the critical step; the first deployment from source alone may fail until the build commit is present.
+4. Vercel should create a new Preview deployment after the generated-assets commit. Confirm `/login` loads, assets under `/assets/` return 200, `/health` is available, and `/dashboard` opens for an authorised administrator.
+5. After the preview succeeds, merge or promote the exact tested branch to production. Avoid deleting or resetting the existing Neon database.
+
+If GitHub Actions reports **403 permission denied** when publishing compiled files, enable **Settings → Actions → General → Workflow permissions → Read and write permissions**, if your repository allows it, then re-run the workflow. Protected branches may require permission to commit; use an unprotected preview branch. GitHub's workflow can also be triggered manually by making a new source commit. The project cannot be considered successfully deployed until the compiled asset commit appears.
+
+Keep the existing Vercel values for `DATABASE_URL` and `SECRET_KEY`; set `COOKIE_SECURE=true` and `FLASK_DEBUG=false`. Do not add a production React `npm start` or `vite --host` process. The React Router client is hosted as static files, while Flask continues to answer `/api/*`.
 
 ## Security and responsible use
 
 Use only authorised student records. Protect claim codes and QR credentials, use staff accounts with suitable permissions, maintain database backups, and perform accessibility and security testing before institutional deployment. A valid QR credential confirms a database record, not the physical identity of its holder; staff must verify the person's identity independently.
 
-## Troubleshooting production builds
+## Troubleshooting
 
-If Vercel reports that `React build missing` or cannot serve `/index.html`, inspect the **deployment build log**, not runtime logs. Confirm the log includes `StudentVerifi React build ready`. If it does not, open **Vercel → Project Settings → Build and Deployment** and remove any old manual Build Command override that bypasses `python build.py`; ensure the project root is the repository root. Vercel's Python build hook must run during the deployment. You do not need to run commands on your own machine for a Vercel deployment.
+If the site shows `React build missing` or `GET /index.html` errors, check that the GitHub branch Vercel deployed actually contains `public/index.html` and hashed files in `public/assets/`. If not, inspect the GitHub Actions workflow; a successful Flask deploy does not imply that React was built. You may also need to check that Vercel's **Root Directory** is the repository root and **Build Command** has no stale dashboard override. The log line `StudentVerifi React assets verified` indicates that the compiled files were found by the build hook.
 
-A successful Vercel deployment does not by itself prove administrator login or live Neon access. Test these separately in the preview deployment before promoting to production.
+If assets load but login is denied, inspect `/api/session`, cookies, administrator role and the live Neon database separately. Never reset administrator passwords or the database merely to fix missing frontend assets.
 
 ## Checks
 
-Run `npm run check`, `npm run build`, and `python -m unittest discover -s tests -v`. GitHub Actions runs these on every push and pull request.
+Run `npm run check`, `npm run build`, and `python -m unittest discover -s tests -v`. GitHub Actions runs these on every push and pull request and commits compiled assets after successful checks on push.
