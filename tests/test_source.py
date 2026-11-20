@@ -61,6 +61,8 @@ class SourceContractTests(unittest.TestCase):
         self.assertIn("github.event_name == 'push'", workflow)
         self.assertIn("STUDENTVERIFI_SOURCE_COMMIT", workflow)
         self.assertIn("STUDENTVERIFI_SOURCE_COMMIT", config["ignoreCommand"])
+        self.assertIn("git log -1 --pretty=%s", config["ignoreCommand"])
+        self.assertIn("build: publish React assets for Vercel", config["ignoreCommand"])
         self.assertIn("startsWith(github.event.head_commit.message", workflow)
         self.assertIn("contents: write", workflow)
         self.assertNotIn("/public/", self.text(".gitignore"))

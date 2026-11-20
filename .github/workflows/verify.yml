@@ -3,6 +3,7 @@ name: Compile and verify StudentVerifi
 on:
     push:
 
+# Write access is used only for the follow-up commit containing compiled React assets.
 permissions:
     contents: write
 

@@ -231,10 +231,14 @@ def dashboard():
             ORDER BY DATE(verified_at)
         """).fetchall()
 
-    weekly_counts = {
-        row['day'].isoformat(): int(row['total'])
-        for row in weekly_rows
-    }
+    weekly_counts = {}
+    for row in weekly_rows:
+        values = record(row)
+        day_value = values.get('day')
+        if day_value is None:
+            continue
+        day_key = day_value.isoformat() if hasattr(day_value, 'isoformat') else str(day_value)
+        weekly_counts[day_key] = int(values.get('total') or 0)
     today = b.now().date()
     weekly = []
     for offset in range(6, -1, -1):

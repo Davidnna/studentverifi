@@ -21,11 +21,12 @@ class Result:
 
 
 class FakeDatabase:
-    def __init__(self, user, requests=None, audit=None, logs=None):
+    def __init__(self, user, requests=None, audit=None, logs=None, weekly=None):
         self.user = user
         self.requests = requests or []
         self.audit = audit or []
         self.logs = logs or []
+        self.weekly = weekly or []
 
     def __enter__(self):
         return self
@@ -41,6 +42,8 @@ class FakeDatabase:
             return Result(self.requests)
         if "FROM admin_audit_logs a" in query:
             return Result(self.audit)
+        if "SELECT DATE(verified_at) AS day" in query:
+            return Result(self.weekly)
         if "FROM verification_logs l" in query:
             return Result(self.logs)
         if "COUNT(*)" in query:
@@ -82,8 +85,11 @@ class RuntimeTests(unittest.TestCase):
             for path in ("/login", "/dashboard", "/students/42", "/verify", "/registration-requests", "/logs", "/admin-audit"):
                 with self.subTest(path=path):
                     result = self.client.get(path)
-                    self.assertEqual(result.status_code, 200)
-                    self.assertIn(b"STUDENTVERIFI_VITE_BUILD", result.data)
+                    try:
+                        self.assertEqual(result.status_code, 200)
+                        self.assertIn(b"STUDENTVERIFI_VITE_BUILD", result.data)
+                    finally:
+                        result.close()
         finally:
             if original is None:
                 index.unlink(missing_ok=True)
@@ -94,7 +100,8 @@ class RuntimeTests(unittest.TestCase):
         from werkzeug.security import generate_password_hash
         user = {"id": 15, "username": "admin", "password_hash": generate_password_hash("SecurePass123!"),
                 "role": "admin", "student_id": None}
-        db = FakeDatabase(user)
+        today = app.now().date()
+        db = FakeDatabase(user, weekly=[{"day": today, "total": 3}])
         with patch.object(app, "get_db", return_value=db), \
              patch.object(app, "ensure_security_migrations"), \
              patch.object(app, "_rate_limit_remaining", return_value=0), \
@@ -105,6 +112,9 @@ class RuntimeTests(unittest.TestCase):
             dashboard = self.client.get("/api/dashboard")
             self.assertEqual(dashboard.status_code, 200)
             self.assertEqual(dashboard.json["students"], 0)
+            self.assertEqual(len(dashboard.json["weekly_verifications"]), 7)
+            self.assertEqual(dashboard.json["weekly_verifications"][-1]["date"], today.isoformat())
+            self.assertEqual(dashboard.json["weekly_verifications"][-1]["total"], 3)
 
 
     def test_registration_requests_returns_pending_and_decided_history(self):
