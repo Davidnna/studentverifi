@@ -1,1 +1,1 @@
-refactor: migrate StudentVerifi UI to accessible React and prefer rear-camera QR scanning
+feat: integrate accessible React UI with security-hardened StudentVerifi backend

@@ -77,17 +77,31 @@ export function Login() {
       el('p',{className:'form-note'},'Are you a student without an account? ',h(InlineLink,{to:'/register'},'Request access')))));
 }
 export function Register() {
-  const [form,setForm]=useState({matric_no:'',claim_code:'',password:'',confirm:''});
+  const initial={matric_no:'',first_name:'',middle_name:'',last_name:'',faculty:'',department:'',level:'',claim_code:'',password:'',confirm:''};
+  const [form,setForm]=useState(initial);
   const [error,setError]=useState(''),[success,setSuccess]=useState(''),[busy,setBusy]=useState(false);
+  const catalogue=useResource('/catalogue');
   async function submit(e){e.preventDefault();setError('');setSuccess('');
     if(form.password!==form.confirm){setError('The passwords do not match.');return;}
-    setBusy(true);try{const out=await api('/register',{method:'POST',body:form});setSuccess(out.message);setForm({matric_no:'',claim_code:'',password:'',confirm:''});}catch(ex){setError(ex.message);}finally{setBusy(false);}}
+    setBusy(true);
+    try{const out=await api('/register',{method:'POST',body:form});setSuccess(out.message);setForm(initial);}
+    catch(ex){setError(ex.message);}finally{setBusy(false);}}
   return el('div',{className:'auth-layout'},
-    el('div',null,el('p',{className:'eyebrow'},'Student access'),el('h1',null,'Request a student account'),el('p',{className:'lead'},'You need a private claim code issued by an administrator. Your request will be reviewed before you can sign in.')),
+    el('div',null,el('p',{className:'eyebrow'},'Student access'),el('h1',null,'Request a student account'),
+      el('p',{className:'lead'},'Enter your details as they appear on the student register, along with the private claim code issued by your administrator.')),
     h(Panel,{className:'auth-panel'},el('form',{onSubmit:submit,className:'form-stack'},
-      h(Problem,{message:error}),success&&el('p',{role:'status',className:'alert alert-success'},success),
+      h(Problem,{message:error||catalogue.error}),
+      success&&el('p',{role:'status',className:'alert alert-success'},success),
       h(Field,{label:'Matriculation number',name:'matric_no',required:true,value:form.matric_no,onChange:getInput(setForm,'matric_no'),autoComplete:'off'}),
-      h(Field,{label:'Private claim code',name:'claim_code',required:true,value:form.claim_code,onChange:getInput(setForm,'claim_code'),autoComplete:'off',hint:'Ask your authorised administrator for your one-time code.'}),
+      el('div',{className:'form-grid'},
+        h(Field,{label:'First name',name:'first_name',required:true,value:form.first_name,onChange:getInput(setForm,'first_name')}),
+        h(Field,{label:'Middle name (if on your record)',name:'middle_name',value:form.middle_name,onChange:getInput(setForm,'middle_name')}),
+        h(Field,{label:'Surname',name:'last_name',required:true,value:form.last_name,onChange:getInput(setForm,'last_name')}),
+        h(Field,{label:'Level',name:'level',required:true,value:form.level,onChange:getInput(setForm,'level'),select:true,choices:['100','200','300','400','500','600']}),
+        h(Field,{label:'Faculty',name:'faculty',required:true,value:form.faculty,onChange:getInput(setForm,'faculty'),select:true,choices:catalogue.value?.faculties||[]}),
+        h(Field,{label:'Department',name:'department',required:true,value:form.department,onChange:getInput(setForm,'department'),select:true,
+          choices:(catalogue.value?.faculty_departments||{})[form.faculty]||catalogue.value?.departments||[]})),
+      h(Field,{label:'Private one-time claim code',name:'claim_code',required:true,value:form.claim_code,onChange:getInput(setForm,'claim_code'),autoComplete:'off',hint:'Receive this privately from your administrator.'}),
       h(Field,{label:'Choose a password',name:'password',type:'password',minLength:12,maxLength:128,required:true,autoComplete:'new-password',value:form.password,onChange:getInput(setForm,'password'),hint:'At least 12 characters.'}),
       h(Field,{label:'Confirm password',name:'confirm',type:'password',required:true,value:form.confirm,onChange:getInput(setForm,'confirm'),autoComplete:'new-password'}),
       h(Button,{type:'submit',busy,className:'button-full'},'Submit account request'),
@@ -179,7 +193,7 @@ export function StudentDetail() {
         el('img',{className:'qr-image',alt:'Student QR code',src:'/api/students/'+id+'/qr.png?v='+qrVersion}),
         el('div',{className:'stacked-actions'},el('a',{className:'button button-outline',href:'/api/students/'+id+'/qr.png',download:true},'Download QR'),
         h(ConfirmAction,{title:'Rotate this QR credential?',text:'The previous QR code will immediately stop working.',dangerous:true,busy,
-          action:()=>mutate('/rotate-qr',{},'QR credential rotated.')},'Rotate QR credential'),
+          action:()=>mutate('/rotate-qr',{},'Student QR code refreshed.')},'Rotate QR credential'),
         h(Button,{variant:'outline',busy,onClick:async()=>{try{const result=await mutate('/claim-code',{});setClaim(result.code);}catch(e){}}},'Issue student claim code')),
         claim && el('div',{className:'claim-box',role:'status'},
           el('strong',null,'One-time claim code (copy now)'),el('code',null,claim),
@@ -255,13 +269,13 @@ function CameraReader({onDetected}) {
 export function Verify() {
   const [token,setToken]=useState(''),[result,setResult]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
   const onScan=async (code)=>{setToken(code);await check(code);};
-  async function check(value){setError('');setResult(null);if(!value.trim()){setError('Enter a QR token.');return;}
+  async function check(value){setError('');setResult(null);if(!value.trim()){setError('Enter a verification code.');return;}
     setBusy(true);try{setResult(await api('/verify',{method:'POST',body:{token:value.trim()}}));}catch(e){setError(e.message);}finally{setBusy(false);}}
   return group(h(TitleBlock,{eyebrow:'Identity verification',title:'Verify student ID',description:'Scan a QR code or enter a code to check the current record status.'}),
     el('div',{className:'two-col'},h(CameraReader,{onDetected:onScan}),h(Panel,null,
-      el('h2',null,'Manual verification'),el('p',{className:'muted'},'Use this when camera access is unavailable.'),
+      el('h2',null,'Enter verification code'),el('p',{className:'muted'},'Use this if your camera is unavailable.'),
       el('form',{onSubmit:e=>{e.preventDefault();check(token);},className:'form-stack'},
-        h(Field,{label:'QR token',name:'token',value:token,onChange:e=>setToken(e.target.value),autoComplete:'off',required:true,placeholder:'Paste scanned code here'}),
+        h(Field,{label:'Verification code',name:'token',value:token,onChange:e=>setToken(e.target.value),autoComplete:'off',required:true,placeholder:'Enter or paste code here'}),
         h(Button,{type:'submit',busy},'Verify identity')),
       h(Problem,{message:error}),result&&el('div',{className:'verification-result',role:'status','aria-live':'polite'},
         el('div',{className:'result-head'},el('h3',null,'Verification result'),h(Pill,{status:result.outcome})),
@@ -329,7 +343,7 @@ export function Cleanup() {
   const {value,loading,error,reload}=useResource('/students/demo-cleanup');
   const {inform}=useAuth();const [confirmation,setConfirmation]=useState(''),[busy,setBusy]=useState(false),[actionError,setActionError]=useState('');
   async function remove(e){e.preventDefault();setBusy(true);setActionError('');try{const r=await api('/students/demo-cleanup',{method:'POST',body:{confirmation}});inform(r.message);setConfirmation('');reload();}catch(ex){setActionError(ex.message);}finally{setBusy(false);}}
-  return group(h(TitleBlock,{eyebrow:'Maintenance',title:'Remove DEMO records',description:'Remove only records with the known DEMO/2026 matriculation prefix and synthetic source flag.'}),
+  return group(h(TitleBlock,{eyebrow:'Maintenance',title:'Remove DEMO records',description:'Remove only records whose matriculation numbers match the exact known DEMO/2026 test pattern.'}),
     h(Panel,{className:'form-panel'},h(Problem,{message:error||actionError}),loading?h(Spinner):group(
       el('p',null,el('strong',null,(value?.count??'—')+' matching synthetic records'), ' will be deleted. Other student records are not selected.'),
       el('p',{className:'notice'},'Deletion cannot be undone. The associated accounts and requests will be removed; verification history will be retained without student links.'),

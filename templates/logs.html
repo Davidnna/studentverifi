@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Verification Logs{% endblock %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow">AUDIT TRAIL</span><h1>Verification logs</h1><p class="muted">Latest 250 verification attempts, including invalid tokens.</p></div><a class="btn secondary" href="{{ url_for('verify') }}">+ New verification</a></div>
+<div class="panel table-wrap"><table><thead><tr><th>Date and time</th><th>Student</th><th>Matric number</th><th>Result</th><th>Verified by</th></tr></thead><tbody>
+{% for row in logs %}<tr><td>{{ row.verified_at }}</td><td>{{ row.full_name or 'Unknown token' }}</td><td>{{ row.matric_no or '—' }}</td><td><span class="pill {{ row.result|lower }}">{{ row.result }}</span></td><td>{{ row.username or '—' }}</td></tr>
+{% else %}<tr><td colspan="5" class="empty">No verification logs yet.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

@@ -1,0 +1,10 @@
+.env
+.env.*
+README.md
+ONLINE_DEPLOYMENT.md
+SECURITY_AUDIT.md
+tests/
+__pycache__/
+*.pyc
+.pytest_cache/
+.github/

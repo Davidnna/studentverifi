@@ -1,19 +1,25 @@
-# Validation summary — 20 November 2026
+# Validation results — security-hardened React integration
 
-Confirmed in the packaging environment:
-- Python 3.13 syntax compilation of app.py: PASS
-- JavaScript Node.js 22 `--check` of all four application modules and vite.config.js: PASS
-- JSON parsing of package.json and vercel.json: PASS
-- Isolated Python tests of name normalization, sample student validation, rejection of invalid levels, and QR-token exclusion from student JSON: PASS
-- Static checks for rear-camera selection, manual fallback and mobile/reduced-motion styles: PASS
-- Archive integrity and exact inventory: PASS once packaged
+Source version: GitHub hardened commit 78a5351 plus React preview 7e1cb5f.
 
-Not executed (runtime/network unavailable):
-- `npm install`, `vite build` or browser rendering
-- Flask/WTF/Psycopg integration tests
-- Vercel routing and preview deployment
-- Live Neon table and constraint compatibility
-- Hardware camera verification on Android/iOS
-- Automated axe/WCAG audit or independent penetration test
+Checks completed in the packaging environment:
+- The authoritative security release `app.py` and `academic_catalogue.py` were retained; an isolated `spa_api.py` was added.
+- All Python files parsed and compiled successfully.
+- All React and Vite JavaScript source files passed Node syntax checking.
+- React uses React Router `BrowserRouter` with protected admin and student UI routes.
+- Mobile QR scanner requests `{facingMode:{exact:'environment'}}` before fallback.
+- Responsive styles include breakpoints for <= 1000px, 760px and 390px, reduced motion and increased contrast.
+- JSON API uses the existing PostgreSQL schema, rate limiter, one-time claim code workflow and audit helpers.
+- Student API responses explicitly exclude QR bearer tokens, password hashes and claim-code hashes.
+- Verification-log writes use token SHA-256 fingerprints and `[REDACTED]` raw token fields.
+- No replacement schema or destructive DDL exists in the SPA API adapter.
+- Existing source-based security regression tests and newly added API contract tests were included.
+- No real DATABASE_URL, administrator credentials or tokens are included in this project archive.
 
-Do not confuse syntax checks with complete application quality assurance. GitHub Actions contains both Python and frontend jobs to run when the source is committed online. Use a non-production Neon branch for end-to-end tests before deploying over an operational system.
+Not completed in this environment:
+- `npm install` and Vite production build (no external package registry access).
+- Python Flask test execution (Flask, Flask-WTF and Psycopg not installed here).
+- Live integration with a Neon PostgreSQL branch or Vercel preview deployment.
+- Browser/device camera permissions and accessibility audit with assistive technology.
+
+Release status: **integration release candidate requiring preview acceptance tests**.

@@ -1,5 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm install --no-audit --no-fund && npm run build",
-  "framework": "flask"
+  "framework": "flask",
+  "buildCommand": "npm install --no-audit --no-fund && npm run build"
 }

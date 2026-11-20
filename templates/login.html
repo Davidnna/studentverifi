@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Sign in · StudentVerifi{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <section class="panel auth-panel" aria-labelledby="signin-title">
+    <span class="eyebrow">STUDENTVERIFI ACCOUNT</span>
+    <h1 id="signin-title">Sign in</h1>
+    <p class="muted">Enter your account details to continue.</p>
+    <form method="post" class="form-stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label for="username">Username</label>
+      <input id="username" name="username" autocomplete="username" maxlength="100" required>
+      <label for="password">Password</label>
+      <input id="password" type="password" name="password" autocomplete="current-password" maxlength="128" required>
+      <button class="btn primary full" type="submit">Sign in</button>
+    </form>
+    <p class="muted">New to StudentVerifi? <a href="{{ url_for('student_register') }}">Create your student account</a>.</p>
+  </section>
+</div>
+{% endblock %}
