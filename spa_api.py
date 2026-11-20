@@ -554,9 +554,28 @@ def register_student():
 @api.get('/registration-requests')
 @protected('admin')
 def requests_list():
+    """Return pending and completed account requests without exposing secrets."""
     with b.get_db() as db:
-        rows = db.execute("SELECT r.id,r.requested_at,r.status,r.claim_code_verified,\n                         s.matric_no,s.full_name AS name,s.department\n                         FROM student_account_requests r JOIN student_profiles s ON s.id=r.student_id\n                         WHERE r.status='Pending' ORDER BY r.id ASC").fetchall()
-    return ok(items=[record(r) for r in rows])
+        rows = db.execute("""
+            SELECT
+                r.id,
+                r.requested_at,
+                r.status,
+                r.claim_code_verified,
+                r.reviewed_at,
+                r.reviewed_by,
+                reviewer.username AS reviewed_by_name,
+                s.matric_no,
+                s.full_name AS name,
+                s.faculty,
+                s.department,
+                s.level
+            FROM student_account_requests r
+            JOIN student_profiles s ON s.id = r.student_id
+            LEFT JOIN users reviewer ON reviewer.id = r.reviewed_by
+            ORDER BY r.requested_at DESC, r.id DESC
+        """).fetchall()
+    return ok(items=[record(row) for row in rows])
 
 @api.post('/registration-requests/<int:rid>/<string:decision>')
 @protected('admin')
@@ -608,15 +627,30 @@ def verify():
 @api.get('/logs')
 @protected('admin')
 def logs():
+    """Return redacted verification activity for the verification workspace."""
     with b.get_db() as db:
-        rows = db.execute('SELECT l.id,l.result,l.verified_at,s.matric_no,u.username AS verified_by_name\n          FROM verification_logs l LEFT JOIN student_profiles s ON s.id=l.student_id\n          LEFT JOIN users u ON u.id=l.verified_by ORDER BY l.id DESC LIMIT 250').fetchall()
-    return ok(items=[record(x) for x in rows])
+        rows = db.execute("""
+            SELECT
+                l.id,
+                l.result,
+                l.verified_at,
+                s.matric_no,
+                s.full_name AS student_name,
+                s.department,
+                u.username AS verified_by_name
+            FROM verification_logs l
+            LEFT JOIN student_profiles s ON s.id = l.student_id
+            LEFT JOIN users u ON u.id = l.verified_by
+            ORDER BY l.id DESC
+            LIMIT 250
+        """).fetchall()
+    return ok(items=[record(row) for row in rows])
 
 @api.get('/admin-audit')
 @protected('admin')
 def audit():
     with b.get_db() as db:
-        rows = db.execute('SELECT a.id,a.action AS event,a.summary AS details,a.created_at,\n                     u.username AS actor FROM admin_audit_logs a LEFT JOIN users u\n                     ON u.id=a.actor_user_id ORDER BY a.id DESC LIMIT 250').fetchall()
+        rows = db.execute('SELECT a.id,a.action AS event,a.target_type,a.target_id,a.summary AS details,a.created_at,\n                     u.username AS actor FROM admin_audit_logs a LEFT JOIN users u\n                     ON u.id=a.actor_user_id ORDER BY a.id DESC LIMIT 250').fetchall()
     return ok(items=[record(x) for x in rows])
 _DEMO_RE = '^DEMO/2026/[0-9]{6}$'
 

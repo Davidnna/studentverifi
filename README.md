@@ -12,9 +12,10 @@ It is an academic software prototype. Use genuine institutional records only aft
 - Search, add, view, activate and deactivate student records.
 - Import student records from a validated UTF-8 CSV file.
 - Issue private one-time claim codes to students whose records already exist.
-- Review, approve or reject student account requests.
+- Review, approve or reject student account requests and filter the complete pending, approved and rejected history.
 - Verify student QR credentials using a camera or manual code entry.
-- Review verification history and administrative activity.
+- Review the latest verification outcomes directly beneath the scanner and manual-entry tools in one verification centre.
+- Review administrative activity, including the actor, action, target and summary.
 - Rotate a QR credential if it is lost or compromised.
 - Review and remove the known synthetic `DEMO/2026/` test records through a confirmation-controlled maintenance page.
 
@@ -42,7 +43,7 @@ A successful QR scan confirms that a credential matches a current record. It doe
 - Database access: SQLAlchemy and Psycopg 3.
 - Deployment: Vercel, with GitHub Actions compiling React into the `public/` directory before Vercel packages Flask.
 
-The React API client obtains a CSRF token before state-changing requests and refreshes an expired token once before retrying. Server-side CSRF protection remains enabled.
+The signed-in administrator workspace uses a persistent left sidebar, an expanded operational dashboard and client-side React Router navigation. Verification history is consolidated with the scanner, while account requests retain their approval and rejection history. A route-level error boundary prevents unexpected page-rendering errors from leaving the workspace blank. The React API client obtains a CSRF token before state-changing requests and refreshes an expired token once before retrying. Server-side CSRF protection remains enabled.
 
 ## Run locally
 

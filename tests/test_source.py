@@ -120,6 +120,38 @@ class SourceContractTests(unittest.TestCase):
         self.assertIn("prefers-reduced-motion", css)
         self.assertIn(":focus-visible", css)
 
+    def test_registration_request_history_includes_decisions(self):
+        api = self.text("spa_api.py")
+        pages = self.text("frontend/src/pages.js")
+        endpoint = api[api.index("@api.get('/registration-requests')"):api.index("@api.post('/registration-requests")]
+        self.assertNotIn("WHERE r.status='Pending'", endpoint)
+        self.assertIn("r.reviewed_at", endpoint)
+        self.assertIn("r.reviewed_by", endpoint)
+        self.assertIn("reviewer.username AS reviewed_by_name", endpoint)
+        self.assertIn("['Approved', 'Approved']", pages)
+        self.assertIn("['Rejected', 'Rejected']", pages)
+        self.assertIn("Reviewed by ", pages)
+
+    def test_verification_history_is_consolidated(self):
+        main = self.text("frontend/src/main.js")
+        ui = self.text("frontend/src/components.js")
+        pages = self.text("frontend/src/pages.js")
+        api = self.text("spa_api.py")
+        self.assertIn("route('logs', h(Navigate, { to: '/verify', replace: true }))", main)
+        self.assertNotIn("['/logs', 'Verification history'", ui)
+        self.assertIn("const history = useResource('/logs')", pages)
+        self.assertIn("s.full_name AS student_name", api)
+        self.assertIn("VERIFIED ACTIVITY", pages)
+
+    def test_workspace_pages_have_a_render_error_fallback(self):
+        ui = self.text("frontend/src/components.js")
+        pages = self.text("frontend/src/pages.js")
+        api = self.text("spa_api.py")
+        self.assertIn("export class PageErrorBoundary", ui)
+        self.assertIn("h(PageErrorBoundary, { key: location.pathname, fallbackTo: user?.role === 'admin' ? '/dashboard' : '/student/account' }, h(Outlet))", ui)
+        self.assertIn("export function AdminAudit()", pages)
+        self.assertIn("a.target_type,a.target_id", api)
+
     def test_no_public_authorisation_details(self):
         api = self.text("spa_api.py")
         self.assertIn("return err('Please sign in to continue.', 401)", api)

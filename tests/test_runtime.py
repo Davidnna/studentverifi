@@ -21,8 +21,11 @@ class Result:
 
 
 class FakeDatabase:
-    def __init__(self, user):
+    def __init__(self, user, requests=None, audit=None, logs=None):
         self.user = user
+        self.requests = requests or []
+        self.audit = audit or []
+        self.logs = logs or []
 
     def __enter__(self):
         return self
@@ -34,10 +37,14 @@ class FakeDatabase:
         query = statement.strip()
         if "FROM users WHERE username" in query or "FROM users WHERE id" in query:
             return Result([self.user])
+        if "FROM student_account_requests r" in query:
+            return Result(self.requests)
+        if "FROM admin_audit_logs a" in query:
+            return Result(self.audit)
+        if "FROM verification_logs l" in query:
+            return Result(self.logs)
         if "COUNT(*)" in query:
             return Result([(0,)])
-        if "FROM verification_logs l" in query:
-            return Result([])
         if "FROM verification_logs" in query:
             return Result([])
         if "FROM faculties f" in query:
@@ -72,7 +79,7 @@ class RuntimeTests(unittest.TestCase):
         original = index.read_bytes() if index.exists() else None
         try:
             index.write_text("<html>STUDENTVERIFI_VITE_BUILD React</html>")
-            for path in ("/login", "/dashboard", "/students/42", "/verify"):
+            for path in ("/login", "/dashboard", "/students/42", "/verify", "/registration-requests", "/logs", "/admin-audit"):
                 with self.subTest(path=path):
                     result = self.client.get(path)
                     self.assertEqual(result.status_code, 200)
@@ -99,6 +106,43 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(dashboard.status_code, 200)
             self.assertEqual(dashboard.json["students"], 0)
 
+
+    def test_registration_requests_returns_pending_and_decided_history(self):
+        user = {"id": 15, "username": "admin", "role": "admin", "student_id": None}
+        requests = [
+            {"id": 3, "status": "Pending", "matric_no": "MAT/003", "name": "Student Three"},
+            {"id": 2, "status": "Approved", "matric_no": "MAT/002", "name": "Student Two",
+             "reviewed_by_name": "admin", "reviewed_at": "2026-11-20T10:00:00Z"},
+            {"id": 1, "status": "Rejected", "matric_no": "MAT/001", "name": "Student One",
+             "reviewed_by_name": "admin", "reviewed_at": "2026-11-19T10:00:00Z"}
+        ]
+        db = FakeDatabase(user, requests=requests)
+        with self.client.session_transaction() as sess:
+            sess.update(user_id=15, username="admin", role="admin", student_id=None)
+        with patch.object(app, "get_db", return_value=db), patch.object(app, "ensure_security_migrations"):
+            response = self.client.get("/api/registration-requests")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row["status"] for row in response.json["items"]], ["Pending", "Approved", "Rejected"])
+        self.assertEqual(response.json["items"][1]["reviewed_by_name"], "admin")
+
+    def test_admin_audit_and_verification_history_return_display_fields(self):
+        user = {"id": 15, "username": "admin", "role": "admin", "student_id": None}
+        db = FakeDatabase(
+            user,
+            audit=[{"id": 4, "event": "student.updated", "target_type": "student", "target_id": 9,
+                    "details": "Administrator updated a student record.", "actor": "admin"}],
+            logs=[{"id": 8, "result": "VALID", "student_name": "Student Eight", "matric_no": "MAT/008"}]
+        )
+        with self.client.session_transaction() as sess:
+            sess.update(user_id=15, username="admin", role="admin", student_id=None)
+        with patch.object(app, "get_db", return_value=db), patch.object(app, "ensure_security_migrations"):
+            audit = self.client.get("/api/admin-audit")
+            logs = self.client.get("/api/logs")
+        self.assertEqual(audit.status_code, 200)
+        self.assertEqual(audit.json["items"][0]["target_type"], "student")
+        self.assertEqual(logs.status_code, 200)
+        self.assertEqual(logs.json["items"][0]["student_name"], "Student Eight")
+        self.assertNotIn("scanned_token", logs.json["items"][0])
 
     def test_registration_endpoint_requires_a_valid_csrf_token(self):
         app.app.config.update(TESTING=True, WTF_CSRF_ENABLED=True)

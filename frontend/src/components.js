@@ -213,6 +213,36 @@ export function Spinner({ label = 'Loading…' }) {
     );
 }
 
+export class PageErrorBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { hasError: false };
+    }
+
+    static getDerivedStateFromError() {
+        return { hasError: true };
+    }
+
+    componentDidCatch(error, info) {
+        console.error('StudentVerifi page rendering failed.', error, info);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return h('section', { className: 'panel page-error-boundary', role: 'alert' },
+                h('p', { className: 'eyebrow' }, 'DISPLAY ERROR'),
+                h('h1', null, 'This page could not be displayed'),
+                h('p', null, 'An unexpected display error occurred. Check the relevant activity history before repeating any action that may have been submitted.'),
+                h('div', { className: 'actions' },
+                    h(Link, { to: this.props.fallbackTo || '/', className: 'button button-primary' }, 'Return to overview')
+                )
+            );
+        }
+
+        return this.props.children;
+    }
+}
+
 export function ConfirmAction({ title, text, action, dangerous = false, children, busy = false }) {
     const [open, setOpen] = useState(false);
     const triggerRef = React.useRef(null);
@@ -318,9 +348,8 @@ const adminGroups = [
     {
         label: 'Verification',
         links: [
-            ['/verify', 'Verify identity', 'verify'],
-            ['/registration-requests', 'Account requests', 'requests'],
-            ['/logs', 'Verification history', 'history']
+            ['/verify', 'Verification centre', 'verify'],
+            ['/registration-requests', 'Account requests', 'requests']
         ]
     },
     {
@@ -348,9 +377,8 @@ const routeTitles = {
     '/students': 'Student directory',
     '/students/new': 'Add student',
     '/students/import': 'Import student records',
-    '/verify': 'Identity verification',
+    '/verify': 'Verification centre',
     '/registration-requests': 'Account requests',
-    '/logs': 'Verification history',
     '/admin-audit': 'Administrative activity',
     '/account/password': 'Account security',
     '/student/account': 'My student card',
@@ -427,7 +455,7 @@ function PublicShell() {
         ),
         h('main', { id: 'public-main', className: 'public-main', tabIndex: -1 },
             error && h(Problem, { message: error }),
-            h(Outlet)
+            h(PageErrorBoundary, { key: location.pathname, fallbackTo: '/' }, h(Outlet))
         ),
         h('footer', { className: 'public-footer' },
             h('div', { className: 'public-footer-inner' },
@@ -617,7 +645,7 @@ function DashboardShell() {
             ),
             h('main', { id: 'workspace-main', className: 'workspace-content', tabIndex: -1 },
                 error && h(Problem, { message: error }),
-                h(Outlet)
+                h(PageErrorBoundary, { key: location.pathname, fallbackTo: user?.role === 'admin' ? '/dashboard' : '/student/account' }, h(Outlet))
             ),
             h('footer', { className: 'workspace-footer' },
                 h('span', null, 'StudentVerifi · Academic prototype'),

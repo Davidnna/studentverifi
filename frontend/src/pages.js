@@ -525,7 +525,7 @@ export function Dashboard() {
                     h(Panel, { className: 'dashboard-panel activity-panel' },
                         el('div', { className: 'panel-heading-row' },
                             el('div', null, el('p', { className: 'eyebrow' }, 'LATEST ACTIVITY'), el('h2', null, 'Recent verification checks'), el('p', { className: 'muted' }, 'The latest recorded verification outcomes.')),
-                            h(Link, { to: '/logs', className: 'text-link' }, 'View history', h(Icon, { name: 'arrow', size: 15 }))
+                            h(Link, { to: '/verify', className: 'text-link' }, 'Open verification centre', h(Icon, { name: 'arrow', size: 15 }))
                         ),
                         recent.length
                             ? el('div', { className: 'activity-table-wrap' },
@@ -1184,6 +1184,9 @@ export function Verify() {
     const [result, setResult] = useState(null);
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
+    const [historyFilter, setHistoryFilter] = useState('ALL');
+    const [historySearch, setHistorySearch] = useState('');
+    const history = useResource('/logs');
 
     async function check(value) {
         setError('');
@@ -1192,14 +1195,18 @@ export function Verify() {
             setError('Enter a verification code.');
             return;
         }
+
         setBusy(true);
         try {
-            setResult(await api('/verify', {
+            const response = await api('/verify', {
                 method: 'POST',
                 body: { token: value.trim() }
-            }));
+            });
+            setResult(response);
+            history.reload();
         } catch (requestError) {
             setError(requestError.message);
+            history.reload();
         } finally {
             setBusy(false);
         }
@@ -1210,13 +1217,31 @@ export function Verify() {
         await check(code);
     }
 
+    const historyItems = Array.isArray(history.value?.items) ? history.value.items : [];
+    const historyCounts = historyItems.reduce((counts, item) => {
+        const outcome = String(item.result || '').toUpperCase();
+        counts[outcome] = (counts[outcome] || 0) + 1;
+        return counts;
+    }, {});
+    const searchTerm = historySearch.trim().toLowerCase();
+    const visibleHistory = historyItems.filter((item) => {
+        const outcome = String(item.result || '').toUpperCase();
+        const matchesFilter = historyFilter === 'ALL' || outcome === historyFilter;
+        const searchable = [item.student_name, item.matric_no, item.department, item.verified_by_name]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+        return matchesFilter && (!searchTerm || searchable.includes(searchTerm));
+    });
+
     return group(
         h(TitleBlock, {
             eyebrow: 'IDENTITY VERIFICATION',
-            title: 'Verify a student',
-            description: 'Scan a QR credential or enter its code to check the current student record status.'
+            title: 'Verification centre',
+            description: 'Scan or enter a QR credential, review the result and consult recent verification activity in one workspace.'
         }),
-        el('div', { className: 'two-col' },
+        h(Problem, { message: error }),
+        el('div', { className: 'two-col verification-workspace' },
             h(CameraReader, { onDetected: onScan }),
             h(Panel, null,
                 el('h2', null, 'Enter verification code'),
@@ -1239,7 +1264,6 @@ export function Verify() {
                     }),
                     h(Button, { type: 'submit', busy }, 'Verify identity')
                 ),
-                h(Problem, { message: error }),
                 result && el('div', {
                     className: 'verification-result',
                     role: 'status',
@@ -1270,6 +1294,87 @@ export function Verify() {
                     el('p', { className: 'notice' }, 'Check the person’s identity independently. A copied QR code is not proof that its holder is the student.')
                 )
             )
+        ),
+        h(Panel, { className: 'verification-history-panel' },
+            el('div', { className: 'panel-heading-row' },
+                el('div', null,
+                    el('p', { className: 'eyebrow' }, 'VERIFIED ACTIVITY'),
+                    el('h2', null, 'Verification history'),
+                    el('p', { className: 'muted' }, 'The latest 250 verification outcomes. QR credentials and reusable tokens are never displayed.')
+                ),
+                h(Button, {
+                    variant: 'outline',
+                    onClick: history.reload,
+                    disabled: history.loading
+                }, history.loading ? 'Refreshing…' : 'Refresh history')
+            ),
+            h(Problem, { message: history.error }),
+            el('div', { className: 'verification-history-summary' },
+                ...[
+                    ['ALL', 'All checks', historyItems.length],
+                    ['VALID', 'Valid', historyCounts.VALID || 0],
+                    ['INACTIVE', 'Inactive', historyCounts.INACTIVE || 0],
+                    ['INVALID', 'Invalid', historyCounts.INVALID || 0]
+                ].map(([key, label, count]) => el('div', {
+                    className: 'verification-summary-item',
+                    key
+                },
+                    el('span', null, label),
+                    el('strong', null, Number(count).toLocaleString())
+                ))
+            ),
+            el('div', { className: 'verification-history-toolbar' },
+                el('div', { className: 'verification-history-filters', role: 'group', 'aria-label': 'Filter verification outcomes' },
+                    ...[
+                        ['ALL', 'All'],
+                        ['VALID', 'Valid'],
+                        ['INACTIVE', 'Inactive'],
+                        ['INVALID', 'Invalid']
+                    ].map(([key, label]) => h(Button, {
+                        key,
+                        variant: historyFilter === key ? 'primary' : 'outline',
+                        'aria-pressed': historyFilter === key,
+                        onClick: () => setHistoryFilter(key)
+                    }, label))
+                ),
+                h(Field, {
+                    label: 'Search activity',
+                    name: 'verification-search',
+                    type: 'search',
+                    placeholder: 'Student, matric no. or verifier',
+                    value: historySearch,
+                    onChange: getInput(setHistorySearch, 'value')
+                })
+            ),
+            history.loading
+                ? h(Spinner, { label: 'Loading verification history…' })
+                : visibleHistory.length
+                    ? el('div', { className: 'table-scroll' },
+                        el('table', null,
+                            el('thead', null,
+                                el('tr', null,
+                                    ...['Outcome', 'Student', 'Matriculation number', 'Verifier', 'Date and time'].map((heading) =>
+                                        el('th', { key: heading, scope: 'col' }, heading)
+                                    )
+                                )
+                            ),
+                            el('tbody', null,
+                                ...visibleHistory.map((item) => el('tr', { key: item.id },
+                                    el('td', null, h(Pill, { status: item.result })),
+                                    el('td', null, item.student_name || 'Unmatched / unavailable record'),
+                                    el('td', null, item.matric_no || '—'),
+                                    el('td', null, item.verified_by_name || 'Former account'),
+                                    el('td', null, compactDate(item.verified_at))
+                                ))
+                            )
+                        )
+                    )
+                    : h(Empty, {
+                        title: historyItems.length ? 'No matching verification events' : 'No verification activity yet',
+                        text: historyItems.length
+                            ? 'Change the outcome filter or search term to see other events.'
+                            : 'New checks will appear here after an authorised verifier scans or enters a credential.'
+                    })
         )
     );
 }
@@ -1279,16 +1384,18 @@ export function Requests() {
     const { value, loading, error, reload } = useResource('/registration-requests');
     const [busy, setBusy] = useState(0);
     const [actionError, setActionError] = useState('');
+    const [filter, setFilter] = useState('All');
+    const [search, setSearch] = useState('');
 
     async function decide(id, choice) {
         setBusy(id);
         setActionError('');
         try {
-            const result = await api('/registration-requests/' + id + '/' + choice, {
+            const response = await api('/registration-requests/' + id + '/' + choice, {
                 method: 'POST',
                 body: {}
             });
-            inform(result.message);
+            inform(response.message);
             reload();
         } catch (requestError) {
             setActionError(requestError.message);
@@ -1297,99 +1404,162 @@ export function Requests() {
         }
     }
 
+    const items = Array.isArray(value?.items) ? value.items : [];
+    const counts = items.reduce((summary, item) => {
+        const status = String(item.status || 'Pending');
+        summary[status] = (summary[status] || 0) + 1;
+        return summary;
+    }, { Pending: 0, Approved: 0, Rejected: 0 });
+    const searchTerm = search.trim().toLowerCase();
+    const visibleItems = items.filter((item) => {
+        const statusMatches = filter === 'All' || item.status === filter;
+        const searchable = [item.name, item.matric_no, item.faculty, item.department, item.level]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+        return statusMatches && (!searchTerm || searchable.includes(searchTerm));
+    });
+
     return group(
         h(TitleBlock, {
             eyebrow: 'ACCOUNT ACCESS',
             title: 'Registration requests',
-            description: 'Review student requests before granting access to an account.'
+            description: 'Review new account requests and consult the complete approval and rejection history.',
+            actions: h(Button, {
+                variant: 'outline',
+                onClick: reload,
+                disabled: loading
+            }, loading ? 'Refreshing…' : 'Refresh requests')
         }),
         h(Problem, { message: error || actionError }),
+        el('section', { className: 'stats-grid request-stats-grid', 'aria-label': 'Registration request totals' },
+            h(Stat, { value: items.length.toLocaleString(), label: 'All requests', icon: 'requests', tone: 'blue', note: 'Request history' }),
+            h(Stat, { value: counts.Pending.toLocaleString(), label: 'Pending', icon: 'history', tone: 'amber', note: 'Awaiting review' }),
+            h(Stat, { value: counts.Approved.toLocaleString(), label: 'Approved', icon: 'check', tone: 'green', note: 'Access granted' }),
+            h(Stat, { value: counts.Rejected.toLocaleString(), label: 'Rejected', icon: 'close', tone: 'violet', note: 'Access declined' })
+        ),
+        el('div', { className: 'request-history-toolbar' },
+            el('div', { className: 'request-filter-tabs', role: 'group', 'aria-label': 'Filter account requests' },
+                ...[
+                    ['All', 'All'],
+                    ['Pending', 'Pending'],
+                    ['Approved', 'Approved'],
+                    ['Rejected', 'Rejected']
+                ].map(([key, label]) => h(Button, {
+                    key,
+                    variant: filter === key ? 'primary' : 'outline',
+                    'aria-pressed': filter === key,
+                    onClick: () => setFilter(key)
+                }, `${label} (${key === 'All' ? items.length : counts[key]})`))
+            ),
+            h(Field, {
+                label: 'Search requests',
+                name: 'request-search',
+                type: 'search',
+                placeholder: 'Student name or matriculation number',
+                value: search,
+                onChange: getInput(setSearch, 'value')
+            })
+        ),
         loading
-            ? h(Spinner)
-            : value?.items?.length
-                ? el('div', { className: 'cards-list' },
-                    ...value.items.map((item) => h(Panel, { key: item.id },
+            ? h(Spinner, { label: 'Loading registration requests…' })
+            : visibleItems.length
+                ? el('div', { className: 'cards-list request-history-list' },
+                    ...visibleItems.map((item) => h(Panel, { key: item.id, className: 'request-history-card' },
                         el('div', { className: 'request-row' },
-                            el('div', null,
-                                el('h2', null, item.name),
-                                el('p', null, item.matric_no + ' · ' + item.department),
-                                el('p', { className: 'hint' }, 'Requested ' + compactDate(item.requested_at))
+                            el('div', { className: 'request-identity' },
+                                el('div', { className: 'request-title-line' },
+                                    el('h2', null, item.name || 'Student record'),
+                                    h(Pill, { status: item.status })
+                                ),
+                                el('p', { className: 'request-matric' }, item.matric_no || 'No matriculation number'),
+                                el('p', { className: 'request-academic' }, [item.faculty, item.department, item.level].filter(Boolean).join(' · ') || 'Academic details unavailable'),
+                                el('p', { className: 'hint' }, 'Requested ' + compactDate(item.requested_at)),
+                                el('p', { className: 'request-claim-status' }, item.claim_code_verified
+                                    ? 'One-time claim code verified'
+                                    : 'Claim-code verification not recorded')
                             ),
-                            el('div', { className: 'actions' },
-                                h(Button, {
-                                    variant: 'outline',
-                                    busy: busy === item.id,
-                                    onClick: () => decide(item.id, 'reject')
-                                }, 'Reject'),
-                                h(ConfirmAction, {
-                                    title: 'Approve student account?',
-                                    text: `You are about to grant account access for ${item.matric_no}. Confirm that this request is authorised.`,
-                                    busy: busy === item.id,
-                                    action: () => decide(item.id, 'approve')
-                                }, 'Approve')
-                            )
+                            item.status === 'Pending'
+                                ? el('div', { className: 'actions request-actions' },
+                                    h(ConfirmAction, {
+                                        title: 'Reject this account request?',
+                                        text: `This will reject the account request for ${item.matric_no}. The student will need a new one-time claim code before submitting another request.`,
+                                        dangerous: true,
+                                        busy: busy === item.id,
+                                        action: () => decide(item.id, 'reject')
+                                    }, 'Reject'),
+                                    h(ConfirmAction, {
+                                        title: 'Approve student account?',
+                                        text: `You are about to grant account access for ${item.matric_no}. Confirm that this request is authorised.`,
+                                        busy: busy === item.id,
+                                        action: () => decide(item.id, 'approve')
+                                    }, 'Approve')
+                                )
+                                : el('div', { className: 'request-review-meta' },
+                                    el('strong', null, item.status === 'Approved' ? 'Access approved' : 'Request rejected'),
+                                    el('span', null, 'Reviewed by ' + (item.reviewed_by_name || 'Former administrator')),
+                                    el('span', null, compactDate(item.reviewed_at))
+                                )
                         )
                     ))
                 )
                 : h(Empty, {
-                    title: 'No pending requests',
-                    text: 'All current student account requests have been reviewed.'
+                    title: filter === 'Pending' ? 'No pending requests' : `No ${filter.toLowerCase()} requests`,
+                    text: searchTerm
+                        ? 'No requests match the current search. Clear the search term or choose another status.'
+                        : filter === 'All'
+                            ? 'Student account requests will appear here when submitted.'
+                            : 'There are no requests in this status.'
                 })
     );
 }
 
-export function EventLogs({ audit = false }) {
-    const { value, loading, error } = useResource(audit ? '/admin-audit' : '/logs');
-    const headings = audit
-        ? ['Action', 'Details', 'Administrator', 'Time']
-        : ['Outcome', 'Student', 'Verifier', 'Time'];
+export function AdminAudit() {
+    const { value, loading, error, reload } = useResource('/admin-audit');
+    const items = Array.isArray(value?.items) ? value.items : [];
 
     return group(
         h(TitleBlock, {
-            eyebrow: audit ? 'ACCOUNTABILITY' : 'VERIFICATION',
-            title: audit ? 'Administrative activity' : 'Verification history',
-            description: audit
-                ? 'A record of important administrative changes.'
-                : 'Recent QR verification outcomes. Reusable QR secrets are not displayed.'
+            eyebrow: 'ACCOUNTABILITY',
+            title: 'Administrative activity',
+            description: 'A record of important administrative changes, account decisions and security-related actions.',
+            actions: h(Button, {
+                variant: 'outline',
+                onClick: reload,
+                disabled: loading
+            }, loading ? 'Refreshing…' : 'Refresh activity')
         }),
         h(Problem, { message: error }),
         loading
-            ? h(Spinner)
-            : value?.items?.length
+            ? h(Spinner, { label: 'Loading administrative activity…' })
+            : items.length
                 ? h(Panel, null,
                     el('div', { className: 'table-scroll' },
                         el('table', null,
                             el('thead', null,
                                 el('tr', null,
-                                    ...headings.map((heading) => el('th', {
-                                        key: heading,
-                                        scope: 'col'
-                                    }, heading))
+                                    ...['Date and time', 'Administrator', 'Action', 'Target', 'Summary'].map((heading) =>
+                                        el('th', { key: heading, scope: 'col' }, heading)
+                                    )
                                 )
                             ),
                             el('tbody', null,
-                                ...value.items.map((item) => el('tr', { key: item.id },
-                                    audit
-                                        ? group(
-                                            el('td', null, String(item.event || '').replaceAll('_', ' ')),
-                                            el('td', null, item.details),
-                                            el('td', null, item.actor || 'System'),
-                                            el('td', null, compactDate(item.created_at))
-                                        )
-                                        : group(
-                                            el('td', null, h(Pill, { status: item.result })),
-                                            el('td', null, item.matric_no || 'Unknown / invalid code'),
-                                            el('td', null, item.verified_by_name || '—'),
-                                            el('td', null, compactDate(item.verified_at))
-                                        )
+                                ...items.map((item, index) => el('tr', { key: item.id || index },
+                                    el('td', null, compactDate(item.created_at)),
+                                    el('td', null, item.actor || 'Former account'),
+                                    el('td', null, el('strong', null, String(item.event || 'Activity').replaceAll('_', ' '))),
+                                    el('td', null, item.target_type
+                                        ? `${item.target_type}${item.target_id ? ' #' + item.target_id : ''}`
+                                        : '—'),
+                                    el('td', null, item.details || '—')
                                 ))
                             )
                         )
                     )
                 )
                 : h(Empty, {
-                    title: 'No events recorded',
-                    text: 'New events will appear here after authorised activity.'
+                    title: 'No administrative activity yet',
+                    text: 'Account decisions and administrative actions will appear here when recorded.'
                 })
     );
 }

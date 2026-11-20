@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { h, AuthProvider, AppShell, Protected } from './components.js';
 import {
     Home,
@@ -14,7 +14,7 @@ import {
     StudentImport,
     Verify,
     Requests,
-    EventLogs,
+    AdminAudit,
     StudentAccount,
     Password,
     Cleanup,
@@ -47,8 +47,8 @@ function App() {
                         route('students/demo-cleanup', h(Cleanup)),
                         route('verify', h(Verify)),
                         route('registration-requests', h(Requests)),
-                        route('logs', h(EventLogs)),
-                        route('admin-audit', h(EventLogs, { audit: true }))
+                        route('logs', h(Navigate, { to: '/verify', replace: true })),
+                        route('admin-audit', h(AdminAudit))
                     ),
                     h(Route, { element: h(Protected, { role: 'student' }) },
                         route('student/account', h(StudentAccount))
