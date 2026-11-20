@@ -18,6 +18,8 @@ def verify_assets(output=OUTPUT):
     html = index.read_text(encoding="utf-8")
     if "STUDENTVERIFI_VITE_BUILD" not in html:
         raise RuntimeError("Unexpected React entrypoint: build marker missing")
+    if "STUDENTVERIFI_SOURCE_COMMIT:" not in html:
+        raise RuntimeError("React source-commit marker missing; assets may be stale")
     scripts = re.findall(r'(?:src|href)=["\'](/assets/[^"\']+\.js)["\']', html)
     if not scripts or not all((output / p.lstrip("/")).is_file() for p in scripts):
         raise RuntimeError("React JavaScript bundle referenced by index.html is missing")

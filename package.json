@@ -1,12 +1,13 @@
 {
     "name": "studentverifi",
-    "version": "2.2.0",
+    "version": "2.3.0",
     "private": true,
     "type": "module",
     "scripts": {
         "dev": "vite --host 0.0.0.0",
         "build": "vite build && node -e \"const f=require('fs');const h=f.readFileSync('public/index.html','utf8');if(!h.includes('STUDENTVERIFI_VITE_BUILD')||!h.includes('/assets/'))process.exit(1)\"",
-        "check": "node --check frontend/src/api.js && node --check frontend/src/main.js && node --check frontend/src/components.js && node --check frontend/src/pages.js"
+        "check": "node --check frontend/src/api.js && node --check frontend/src/main.js && node --check frontend/src/components.js && node --check frontend/src/pages.js && npm run test:client",
+        "test:client": "node --test tests/api-client.test.js"
     },
     "dependencies": {
         "html5-qrcode": "2.3.8",

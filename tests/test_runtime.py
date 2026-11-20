@@ -38,6 +38,10 @@ class FakeDatabase:
             return Result([(0,)])
         if "FROM verification_logs l" in query:
             return Result([])
+        if "FROM verification_logs" in query:
+            return Result([])
+        if "FROM faculties f" in query:
+            return Result([])
         raise AssertionError("Unexpected query: " + query)
 
 
@@ -94,6 +98,26 @@ class RuntimeTests(unittest.TestCase):
             dashboard = self.client.get("/api/dashboard")
             self.assertEqual(dashboard.status_code, 200)
             self.assertEqual(dashboard.json["students"], 0)
+
+
+    def test_registration_endpoint_requires_a_valid_csrf_token(self):
+        app.app.config.update(TESTING=True, WTF_CSRF_ENABLED=True)
+        client = app.app.test_client()
+        session = client.get("/api/session")
+        self.assertEqual(session.status_code, 200)
+        token = session.json["csrf_token"]
+
+        rejected = client.post("/api/register", json={})
+        self.assertEqual(rejected.status_code, 400)
+        self.assertIn("Security check expired", rejected.json["error"])
+
+        accepted_by_csrf = client.post(
+            "/api/register",
+            json={"matric_no": ""},
+            headers={"X-CSRFToken": token}
+        )
+        self.assertEqual(accepted_by_csrf.status_code, 400)
+        self.assertNotIn("Security check expired", accepted_by_csrf.json["error"])
 
     def test_student_role_cannot_access_admin_api(self):
         with self.client.session_transaction() as sess:

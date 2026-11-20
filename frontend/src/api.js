@@ -1,7 +1,10 @@
 let csrfToken = '';
+let csrfRefreshPromise = null;
+
+const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 export function setCsrf(token) {
-    csrfToken = token || '';
+    csrfToken = typeof token === 'string' ? token : '';
 }
 
 export class ApiError extends Error {
@@ -13,30 +16,140 @@ export class ApiError extends Error {
     }
 }
 
+async function readJson(response) {
+    return response.json().catch(() => ({}));
+}
+
+async function refreshCsrf() {
+    if (csrfRefreshPromise) {
+        return csrfRefreshPromise;
+    }
+
+    csrfRefreshPromise = (async () => {
+        let response;
+        try {
+            response = await fetch('/api/session', {
+                method: 'GET',
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+                cache: 'no-store'
+            });
+        } catch (error) {
+            throw new ApiError('Your security session could not be refreshed. Check your connection and try again.', 0);
+        }
+
+        const data = await readJson(response);
+        if (!response.ok || !data.csrf_token) {
+            throw new ApiError(
+                data.error || 'Your security session could not be refreshed. Reload the page and try again.',
+                response.status
+            );
+        }
+
+        setCsrf(data.csrf_token);
+        return csrfToken;
+    })().finally(() => {
+        csrfRefreshPromise = null;
+    });
+
+    return csrfRefreshPromise;
+}
+
+function isCsrfFailure(response, data) {
+    if (response.status !== 400 && response.status !== 403) {
+        return false;
+    }
+
+    const message = String(data?.error || data?.description || '').toLowerCase();
+    return message.includes('security check') ||
+        message.includes('csrf') ||
+        message.includes('token has expired') ||
+        message.includes('token is missing');
+}
+
 export async function api(path, { method = 'GET', body, signal } = {}) {
-    const headers = { Accept: 'application/json' };
-    if (method !== 'GET' && method !== 'HEAD' && csrfToken) headers['X-CSRFToken'] = csrfToken;
-    if (body !== undefined && !(body instanceof FormData)) headers['Content-Type'] = 'application/json';
-    let response;
-    try {
-        response = await fetch('/api' + path, {
-            method, headers, credentials: 'same-origin',
-            body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
+    const requestMethod = String(method).toUpperCase();
+    const requiresCsrf = UNSAFE_METHODS.has(requestMethod);
+
+    if (requiresCsrf && !csrfToken) {
+        await refreshCsrf();
+    }
+
+    const send = () => {
+        const headers = { Accept: 'application/json' };
+        if (requiresCsrf && csrfToken) {
+            headers['X-CSRFToken'] = csrfToken;
+        }
+        if (body !== undefined && !(body instanceof FormData)) {
+            headers['Content-Type'] = 'application/json';
+        }
+
+        return fetch('/api' + path, {
+            method: requestMethod,
+            headers,
+            credentials: 'same-origin',
+            cache: 'no-store',
+            body: body === undefined
+                ? undefined
+                : body instanceof FormData
+                    ? body
+                    : JSON.stringify(body),
             signal
         });
+    };
+
+    let response;
+    try {
+        response = await send();
     } catch (error) {
-        if (error.name === 'AbortError') throw error;
+        if (error.name === 'AbortError') {
+            throw error;
+        }
         throw new ApiError('Unable to connect. Check your connection and retry.', 0);
     }
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-        throw new ApiError(data.error || `Request failed (${response.status}).`, response.status, data.details || data.duplicates);
+
+    let data = await readJson(response);
+
+    // Flask-WTF rejects an expired or missing token before the endpoint runs.
+    // Refresh it and retry once; server-side CSRF protection remains enabled.
+    if (requiresCsrf && isCsrfFailure(response, data)) {
+        await refreshCsrf();
+        try {
+            response = await send();
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                throw error;
+            }
+            throw new ApiError('Unable to connect. Check your connection and retry.', 0);
+        }
+        data = await readJson(response);
     }
+
+    if (!response.ok) {
+        throw new ApiError(
+            data.error || `Request failed (${response.status}).`,
+            response.status,
+            data.details || data.duplicates
+        );
+    }
+
+    if (path === '/session' && data.csrf_token) {
+        setCsrf(data.csrf_token);
+    }
+    if (path === '/logout') {
+        setCsrf('');
+    }
+
     return data;
 }
 
 export const compactDate = (value) => {
-    if (!value) return '—';
+    if (!value) {
+        return '—';
+    }
+
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'});
+    return Number.isNaN(date.getTime())
+        ? String(value)
+        : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 };

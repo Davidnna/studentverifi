@@ -2,13 +2,13 @@ name: Compile and verify StudentVerifi
 
 on:
     push:
-    pull_request:
 
 permissions:
     contents: write
 
 jobs:
     build-and-test:
+        if: "${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'build: publish React assets for Vercel') }}"
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
@@ -28,6 +28,7 @@ jobs:
               run: |
                   npm run check
                   npm run build
+                  printf '\n<!-- STUDENTVERIFI_SOURCE_COMMIT:%s -->\n' "$GITHUB_SHA" >> public/index.html
                   python build.py
             - name: Run tests
               env:

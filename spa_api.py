@@ -4,6 +4,7 @@ import hashlib
 import io
 import re
 import secrets
+from datetime import timedelta
 from functools import wraps
 from pathlib import Path
 from flask import Blueprint, jsonify, request, send_file, send_from_directory, session
@@ -207,8 +208,55 @@ def dashboard():
         active = db.execute("SELECT COUNT(*) FROM students WHERE status='Active'").fetchone()[0]
         checks = db.execute('SELECT COUNT(*) FROM verification_logs').fetchone()[0]
         pending = db.execute("SELECT COUNT(*) FROM student_account_requests WHERE status='Pending'").fetchone()[0]
-        recent = db.execute('SELECT l.id,l.result,l.verified_at,s.matric_no,s.full_name\n            FROM verification_logs l LEFT JOIN student_profiles s ON s.id=l.student_id\n            ORDER BY l.id DESC LIMIT 8').fetchall()
-    return ok(total=total, students=total, active=active, inactive=total - active, checks=checks, verifications=checks, pending=pending, recent=[record(x) for x in recent])
+        recent = db.execute("""
+            SELECT l.id, l.result, l.verified_at, s.matric_no, s.full_name
+            FROM verification_logs l
+            LEFT JOIN student_profiles s ON s.id = l.student_id
+            ORDER BY l.id DESC
+            LIMIT 8
+        """).fetchall()
+        faculty_rows = db.execute("""
+            SELECT f.name AS faculty, COUNT(s.id) AS total
+            FROM faculties f
+            LEFT JOIN students s ON s.faculty_id = f.id
+            GROUP BY f.id, f.name
+            ORDER BY total DESC, f.name ASC
+            LIMIT 6
+        """).fetchall()
+        weekly_rows = db.execute("""
+            SELECT DATE(verified_at) AS day, COUNT(*) AS total
+            FROM verification_logs
+            WHERE verified_at >= NOW() - INTERVAL '6 days'
+            GROUP BY DATE(verified_at)
+            ORDER BY DATE(verified_at)
+        """).fetchall()
+
+    weekly_counts = {
+        row['day'].isoformat(): int(row['total'])
+        for row in weekly_rows
+    }
+    today = b.now().date()
+    weekly = []
+    for offset in range(6, -1, -1):
+        day = today - timedelta(days=offset)
+        weekly.append({
+            'date': day.isoformat(),
+            'label': day.strftime('%a'),
+            'total': weekly_counts.get(day.isoformat(), 0)
+        })
+
+    return ok(
+        total=total,
+        students=total,
+        active=active,
+        inactive=total - active,
+        checks=checks,
+        verifications=checks,
+        pending=pending,
+        recent=[record(row) for row in recent],
+        faculty_summary=[record(row) for row in faculty_rows],
+        weekly_verifications=weekly
+    )
 
 @api.get('/catalogue')
 def catalogue():
@@ -364,6 +412,12 @@ def issue_claim(student_id):
         existing = db.execute('SELECT id FROM users WHERE student_id=?', (student_id,)).fetchone()
         if existing:
             return err('The student already has an account.', 409)
+        pending = db.execute(
+            "SELECT id FROM student_account_requests WHERE student_id=? AND status='Pending'",
+            (student_id,)
+        ).fetchone()
+        if pending:
+            return err('This student already has an account request awaiting review.', 409)
         code = secrets.token_urlsafe(24)
         db.execute('UPDATE students SET claim_code_hash=? WHERE id=?', (generate_password_hash(code), student_id))
         b.audit_admin_action(db, 'student.claim_code_issued', 'student', student_id, 'Administrator issued a private one-time claim code.')
@@ -403,28 +457,99 @@ def register_student():
     body = data()
     try:
         identity = b.student_identity(body)
-    except ValueError as e:
-        return err(str(e))
+    except ValueError as error:
+        return err(str(error))
+
     password = str(body.get('password') or '')
-    if len(password) < 10 or len(password) > 128 or password != body.get('confirm'):
-        return err('Password must be 10–128 characters and match confirmation.')
+    if len(password) < 12 or len(password) > 128 or password != body.get('confirm'):
+        return err('Password must be 12–128 characters and match confirmation.')
+
     code = str(body.get('claim_code') or '').strip()
     if not code or len(code) > 128:
-        return err('Enter your one-time claim code.')
-    with b.get_db() as db:
-        student = db.execute('SELECT * FROM student_profiles WHERE matric_no=?', (identity['matric_no'],)).fetchone()
-        matches = student and student['status'] == 'Active' and (student['first_name'].casefold() == identity['first_name'].casefold()) and ((student['middle_name'] or '').casefold() == identity['middle_name'].casefold()) and (student['last_name'].casefold() == identity['last_name'].casefold()) and (student['faculty'] == identity['faculty']) and (student['department'] == identity['department']) and (student['level'].casefold() == identity['level'].casefold())
-        if not matches:
-            return err('Registration details do not match an active record. Contact your administrator.', 403)
-        if db.execute('SELECT id FROM users WHERE username=?', (identity['matric_no'],)).fetchone():
-            return err('An account already exists. Please sign in.', 409)
-        if db.execute("SELECT id FROM student_account_requests WHERE student_id=? AND status='Pending'", (student['id'],)).fetchone():
-            return err('A registration request is already pending.', 409)
-        if not student['claim_code_hash'] or not check_password_hash(student['claim_code_hash'], code):
-            return err('The claim code is invalid or has expired.', 403)
-        db.execute("INSERT INTO student_account_requests\n                  (student_id,password_hash,claim_code_verified,status,requested_at)\n                  VALUES (?,?,TRUE,'Pending',?)", (student['id'], generate_password_hash(password), b.now()))
-        db.execute('UPDATE students SET claim_code_hash=NULL WHERE id=?', (student['id'],))
-    return ok(message='Account request submitted. An administrator will review it.')
+        return err('Enter the private one-time claim code issued by your administrator.')
+
+    try:
+        b.ensure_security_migrations()
+        bucket = b._rate_limit_hash('registration-matric', identity['matric_no'])
+        buckets = [bucket]
+
+        with b.get_db() as db:
+            remaining = b._rate_limit_remaining(db, buckets)
+            if remaining:
+                reply, status_code = err(
+                    'Too many registration attempts for this student record. Contact your administrator.',
+                    429
+                )
+                reply.headers['Retry-After'] = str(remaining)
+                return reply, status_code
+
+            student = db.execute("""
+                SELECT s.*, f.name AS faculty, d.name AS department,
+                    TRIM(CONCAT_WS(' ', s.first_name, NULLIF(s.middle_name, ''), s.last_name)) AS full_name
+                FROM students s
+                JOIN faculties f ON f.id = s.faculty_id
+                JOIN departments d ON d.id = s.department_id
+                WHERE s.matric_no = ?
+                FOR UPDATE OF s
+            """, (identity['matric_no'],)).fetchone()
+
+            matches = bool(
+                student and
+                student['status'] == 'Active' and
+                student['first_name'].casefold() == identity['first_name'].casefold() and
+                (student['middle_name'] or '').casefold() == identity['middle_name'].casefold() and
+                student['last_name'].casefold() == identity['last_name'].casefold() and
+                student['faculty'] == identity['faculty'] and
+                student['department'] == identity['department'] and
+                student['level'].casefold() == identity['level'].casefold()
+            )
+            if not matches:
+                b._record_rate_limit_failure(db, buckets)
+                return err(
+                    'We could not match those details to an active student record. Check the information or contact your administrator.',
+                    403
+                )
+
+            existing_user = db.execute(
+                'SELECT id FROM users WHERE student_id = ? OR username = ? LIMIT 1',
+                (student['id'], identity['matric_no'])
+            ).fetchone()
+            if existing_user:
+                return err('An account is already linked to this student record. Sign in or contact your administrator.', 409)
+
+            pending = db.execute(
+                "SELECT id FROM student_account_requests WHERE student_id = ? AND status = 'Pending'",
+                (student['id'],)
+            ).fetchone()
+            if pending:
+                return err('An account request for this student is already awaiting administrator review. Please do not submit another request.', 409)
+
+            claim_hash = student['claim_code_hash']
+            try:
+                valid_claim = bool(claim_hash and check_password_hash(claim_hash, code))
+            except (ValueError, TypeError):
+                valid_claim = False
+            if not valid_claim:
+                b._record_rate_limit_failure(db, buckets)
+                return err(
+                    'The claim code is incorrect, has already been used or has been replaced. Ask your administrator for a new one-time code.',
+                    403
+                )
+
+            db.execute("""
+                INSERT INTO student_account_requests
+                    (student_id, password_hash, claim_code_verified, status, requested_at)
+                VALUES (?, ?, TRUE, 'Pending', ?)
+            """, (student['id'], generate_password_hash(password), b.now()))
+            db.execute('UPDATE students SET claim_code_hash = NULL WHERE id = ?', (student['id'],))
+            b._clear_rate_limit_failures(db, buckets)
+
+        return ok(message='Your account request has been submitted. An administrator will review it before access is granted.')
+    except IntegrityError:
+        return err('An account request is already awaiting review. Contact your administrator if you need help.', 409)
+    except SQLAlchemyError:
+        b.app.logger.exception('Student account request failed')
+        return err('Account registration is temporarily unavailable. Please try again shortly.', 503)
 
 @api.get('/registration-requests')
 @protected('admin')

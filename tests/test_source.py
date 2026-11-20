@@ -59,6 +59,9 @@ class SourceContractTests(unittest.TestCase):
         self.assertIn("npm run build", workflow)
         self.assertIn("git add -f public/index.html", workflow)
         self.assertIn("github.event_name == 'push'", workflow)
+        self.assertIn("STUDENTVERIFI_SOURCE_COMMIT", workflow)
+        self.assertIn("STUDENTVERIFI_SOURCE_COMMIT", config["ignoreCommand"])
+        self.assertIn("startsWith(github.event.head_commit.message", workflow)
         self.assertIn("contents: write", workflow)
         self.assertNotIn("/public/", self.text(".gitignore"))
         self.assertIn("verify_assets()", self.text("build.py"))
@@ -82,7 +85,38 @@ class SourceContractTests(unittest.TestCase):
         css = self.text("frontend/src/style.css")
         self.assertIn("facingMode: { exact: 'environment' }".replace(" ", ""),
                           scanner.replace(" ", ""))
-        self.assertIn("@media(max-width:760px)", css.replace(" ", ""))
+        self.assertIn("@media(max-width:700px)", css.replace(" ", ""))
+        self.assertIn("prefers-reduced-motion", css)
+        self.assertIn(":focus-visible", css)
+
+    def test_csrf_token_refresh_and_single_retry(self):
+        client = self.text("frontend/src/api.js")
+        self.assertIn("async function refreshCsrf()", client)
+        self.assertIn("credentials: 'same-origin'", client)
+        self.assertIn("isCsrfFailure(response, data)", client)
+        self.assertIn("await refreshCsrf()", client)
+        self.assertIn("CSRFProtect(app)", self.text("app.py"))
+
+    def test_student_registration_is_locked_and_rate_limited(self):
+        api = self.text("spa_api.py")
+        register = api[api.index("@api.post('/register')"):api.index("@api.get('/registration-requests')")]
+        self.assertIn("FOR UPDATE OF s", register)
+        self.assertIn("_rate_limit_remaining", register)
+        self.assertIn("_record_rate_limit_failure", register)
+        self.assertIn("claim_code_hash", register)
+        self.assertIn("len(password) < 12", register)
+
+    def test_workspace_redesign_and_public_information_content(self):
+        ui = self.text("frontend/src/components.js")
+        pages = self.text("frontend/src/pages.js")
+        css = self.text("frontend/src/style.css")
+        self.assertIn("app-sidebar", ui)
+        self.assertIn("sidebar-backdrop", ui)
+        self.assertIn("aria-hidden", ui)
+        self.assertIn("studentGroups", ui)
+        self.assertIn("Protecting student information", pages)
+        self.assertIn("dashboard-insights-grid", pages)
+        self.assertIn("@media (max-width: 700px)", css)
         self.assertIn("prefers-reduced-motion", css)
         self.assertIn(":focus-visible", css)
 

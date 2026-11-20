@@ -10,7 +10,7 @@ class BundleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             out = Path(d)
             (out / "assets").mkdir()
-            (out / "index.html").write_text("<div>STUDENTVERIFI_VITE_BUILD</div><script src='/assets/app.js'></script>", encoding="utf-8")
+            (out / "index.html").write_text("<div>STUDENTVERIFI_VITE_BUILD</div><!-- STUDENTVERIFI_SOURCE_COMMIT:test --><script src='/assets/app.js'></script>", encoding="utf-8")
             (out / "assets" / "app.js").write_text("/* built script */", encoding="utf-8")
             (out / "assets" / "style.css").write_text("body{}", encoding="utf-8")
             verify_assets(out)
@@ -25,7 +25,7 @@ class BundleTests(unittest.TestCase):
             out = Path(d)
             (out / "assets").mkdir()
             (out / "assets" / "style.css").write_text("body{}", encoding="utf-8")
-            (out / "index.html").write_text("<div>STUDENTVERIFI_VITE_BUILD</div><script src='/assets/absent.js'></script>", encoding="utf-8")
+            (out / "index.html").write_text("<div>STUDENTVERIFI_VITE_BUILD</div><!-- STUDENTVERIFI_SOURCE_COMMIT:test --><script src='/assets/absent.js'></script>", encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "bundle .* missing"):
                 verify_assets(out)
 
