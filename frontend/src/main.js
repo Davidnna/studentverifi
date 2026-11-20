@@ -1,0 +1,30 @@
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { h, AuthProvider, AppShell, Protected } from './components.js';
+import { Home, InfoPage, Login, Register, Dashboard, Students, StudentForm,
+  StudentDetail, StudentImport, Verify, Requests, EventLogs, StudentAccount,
+  Password, Cleanup, Missing } from './pages.js';
+import './style.css';
+
+const route=(path,element)=>h(Route,{key:path,path,element});
+const info=(page)=>route(page,h(InfoPage,{page:'/'+page}));
+function App(){
+  return h(BrowserRouter,null,h(AuthProvider,null,
+    h(Routes,null,
+      h(Route,{path:'/',element:h(AppShell)},
+        route('',h(Home)),
+        info('how-it-works'), info('about'), info('faq'), info('privacy'), info('contact'),
+        route('login',h(Login)),route('register',h(Register)),
+        h(Route,{element:h(Protected,{role:'admin'})},
+          route('dashboard',h(Dashboard)),route('students',h(Students)),
+          route('students/new',h(StudentForm)),route('students/import',h(StudentImport)),
+          route('students/:id',h(StudentDetail)),route('verify',h(Verify)),
+          route('registration-requests',h(Requests)),route('logs',h(EventLogs)),
+          route('admin-audit',h(EventLogs,{audit:true})),route('students/demo-cleanup',h(Cleanup))),
+        h(Route,{element:h(Protected,{role:'student'})},route('student/account',h(StudentAccount))),
+        h(Route,{element:h(Protected)},route('account/password',h(Password))),
+        route('*',h(Missing))))));
+}
+
+createRoot(document.getElementById('root')).render(h(App));

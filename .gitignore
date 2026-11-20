@@ -1,6 +1,10 @@
-__pycache__/
-*.py[cod]
-instance/
 .env
-.venv/
+.env.*
+!.env.example
+node_modules/
+__pycache__/
 .pytest_cache/
+.venv/
+.vite/
+coverage/
+.DS_Store

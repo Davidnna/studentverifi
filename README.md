@@ -1,35 +1,71 @@
-# StudentVerifi — Neon PostgreSQL edition
+# StudentVerifi — React interface / Flask + Neon API
 
-A web-based academic prototype for QR-code-assisted student identity verification at Ebonyi State University (EBSU). Built with Flask, SQLAlchemy, Psycopg 3, Neon PostgreSQL and Vercel. **It is not an official EBSU service.**
+**Release:** React migration candidate `2.0.0-rc.1` (20 November 2026).
 
-## Online-only deployment
+This is a **complete source-code candidate**, rebuilt from the older `studentverifi-main.zip` that was supplied for this task and the more recent workflow described in the conversation. **The archive was NOT the currently deployed security-hardened code**. That distinction matters: this release has not been tested against the live Neon schema, and it is **not a verified drop-in replacement for your current working Vercel production deployment**. Use a Vercel Preview deployment and a Neon database branch/snapshot first. Do not upload genuine student data until the compatibility/security review is complete.
 
-Use `ONLINE_DEPLOYMENT.md`. The project is designed for GitHub + Vercel + Neon; local execution is optional and is not required for the intended deployment workflow. Upload the extracted contents of this ZIP to the root of the existing GitHub repository, not the ZIP as one file.
+## Features implemented
 
-## Main capabilities
+- React SPA, React Router navigation, Vite asset bundling and lazy-loaded QR scanner package.
+- Mobile-first responsive layout: navigation collapses on phones; forms and cards reflow; tables are horizontally scrollable; layouts are supported down to a narrow phone viewport.
+- Accessibility-oriented semantics: skip link, labelled inputs, keyboard focus indicators, status text in addition to colours, live error announcements, modal keyboard navigation, reduced-motion style, and readable touch controls.
+- Rear-facing mobile camera is requested **first** (`facingMode: { exact: 'environment' }`), with a softer environment fallback; a camera picker and manual QR token entry remain available.
+- JSON API `/api/*` backed by Flask sessions and existing Neon Postgres tables; raw QR secrets are omitted from verification logs and API student responses.
+- Admin overview, student directory, add student, CSV import, registration requests, audit events, QR issuance/rotation, account/password screens, verification history, test-data cleanup.
+- Legacy database tables are never dropped/recreated; extra namespaced support tables `sv_login_attempts` and `sv_admin_audit` are created as needed.
 
-- 10 faculties and 59 departments in the bundled academic catalogue.
-- Separate first, middle and surname fields.
-- Configurable matriculation-number structural validation; the default pattern is not an official EBSU validation specification.
-- UTF-8 CSV import (up to 8 MB) with duplicate checks and all-or-nothing transaction behaviour.
-- Administrator and student authentication with role-separated access.
-- Private one-time claim codes for student account requests, with administrator approval.
-- Unique opaque QR tokens, camera scanning, manual verification, verification history and QR rotation.
-- Neon PostgreSQL schema initialisation through the protected browser setup route.
-- Lazy additive security migration after deployment; no database I/O during Flask module import.
-- Login rate limiting, CSRF protection, session limits, security headers and no-store responses.
-- Administrator audit trail for record creation/import, status changes, claim-code issuance, QR rotation, account approvals, password changes and synthetic-data cleanup.
-- Administrator-only preview and removal of the exact synthetic `DEMO/2026/NNNNNN` test dataset.
+## What this release does not demonstrate
 
-## Important operational points
+No live Neon credentials were available, and outbound dependency installation was unavailable in the packaging environment. We completed **Python syntax compilation and JavaScript syntax checks**, but could not execute Vite's build, Flask runtime tests, automated accessibility browser checks, or the actual Vercel deployment. GitHub Actions contains the build and runtime smoke tests that must pass. Mobile camera selection must also be tested on at least Android Chrome and iOS Safari, because browser permissions and hardware differ.
 
-- Keep secrets in Vercel environment variables; never commit `.env` or secret values.
-- The production environment should have `DATABASE_URL`, `SECRET_KEY`, `INITIAL_ADMIN_USERNAME`, `INITIAL_ADMIN_PASSWORD`, `COOKIE_SECURE=true` and `FLASK_DEBUG=false`.
-- `SETUP_TOKEN` is needed only for one-time initialisation of a new database. The route automatically returns 404 after an administrator and core schema exist. Remove the token after initialisation.
-- On the first administrator sign-in after this security update, the application applies additive security migrations, including rate-limit storage and verification-token redaction.
-- Before importing genuine records, use Students → synthetic-data cleanup and confirm that only the generated `DEMO/2026/NNNNNN` rows are selected. The cleanup action is not automatic.
-- Only process student records and photographs with proper institutional authorisation. The project remains an academic prototype until the university approves its use and operating procedures.
+The uploaded snapshot was MySQL based. This release provides a new PostgreSQL API implementation rather than transplanting the live Flask implementation line-for-line. Pre-existing security releases may have additional features, constraints, tables or roles which this source **does not implement**. These must be reconciled with your actual deployed repository before a production switch.
 
-## Testing and limitations
+## Project structure
 
-The included `tests/` directory contains Flask unit/smoke tests. A GitHub Actions workflow runs them automatically on pushes to `main`/`master` and on pull requests; Vercel deployment itself does not run these tests. Package preparation also checks Python syntax, Jinja template parsing, CSRF form coverage, endpoint references and catalogue consistency. The packaging environment did not permit installing missing Flask/Werkzeug/Flask-WTF/Psycopg packages, so the full Flask test-client suite and live Neon/Vercel integration could not be run before delivery. See `SECURITY_AUDIT.md` for scope and remaining production controls.
+```text
+studentverifi-react-release/
+├── app.py                      Flask API and SPA fallback
+├── requirements.txt            Python runtime dependencies
+├── package.json                React, React Router, scanner and Vite
+├── vite.config.js              Vite: build to public/
+├── frontend/
+│   ├── index.html
+│   └── src/
+│       ├── main.js             Client-side routes
+│       ├── components.js       Navigation, forms, accessibility
+│       ├── pages.js            User-facing screens and scanner
+│       ├── api.js              CSRF-aware API client
+│       └── style.css
+├── public/                     Logo and favicon; Vite adds built index/assets
+├── tests/test_release.py       Offline backend smoke tests
+├── .github/workflows/check.yml Automated GitHub checks
+├── vercel.json                  Flask + frontend build configuration
+├── .env.example                Placeholder configuration, NO REAL SECRETS
+└── DEPLOYMENT_AND_TESTING.md
+```
+
+## Development (optional, not needed for user's browser-only workflow)
+
+```bash
+npm install
+npm run build
+python -m pip install -r requirements.txt
+export DATABASE_URL='postgresql+psycopg://...'
+export SECRET_KEY='a-long-local-secret'
+python app.py
+```
+
+During UI-only development, `npm run dev` launches Vite and proxies `/api/*` and `/health` to Flask on port 5000.
+
+## Browser-only deployment
+
+See `DEPLOYMENT_AND_TESTING.md`. Start with a Vercel Preview deployment connected to a separate Neon branch. A successful build does **not** validate existing table compatibility. After signing in, visit `/api/compatibility` to inspect required columns and missing schema fields. Do not perform state-changing checks on the production database before compatibility is established.
+
+## Data and security considerations
+
+- Never share `DATABASE_URL`, `SECRET_KEY`, administrator passwords or student claim codes.
+- All imported records should be independently validated against an authorised register.
+- Avoid treating a QR code as sufficient proof of the bearer's identity; compare against authorised photo identification.
+- Even if the compatibility endpoint says `compatible: true`, verify login, accounts, scanning, audit, imports and revocation against a **test branch** before release.
+- `SETUP_TOKEN` is neither required nor used by this version. Your existing database should already be initialised.
+- Use the official institution's data retention and incident response policies; do not assume this prototype has independent penetration-test certification.

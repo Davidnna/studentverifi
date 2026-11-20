@@ -1,9 +1,0 @@
-{% extends "base.html" %}
-{% block title %}Administrator audit trail · StudentVerifi{% endblock %}
-{% block content %}
-<div class="page-heading"><div><span class="eyebrow">ACCOUNTABILITY</span><h1>Administrator audit trail</h1><p class="muted">Latest 250 administrative and account-security events. Secrets and QR tokens are not recorded here.</p></div><a class="btn secondary" href="{{ url_for('dashboard') }}">Back to dashboard</a></div>
-<div class="panel table-wrap"><table><thead><tr><th>Date and time</th><th>Actor</th><th>Action</th><th>Target</th><th>Summary</th></tr></thead><tbody>
-{% for row in audit_rows %}<tr><td>{{ row.created_at }}</td><td>{{ row.username or 'Former account' }}</td><td><strong>{{ row.action }}</strong></td><td>{{ row.target_type or '—' }}{% if row.target_id %} #{{ row.target_id }}{% endif %}</td><td>{{ row.summary }}</td></tr>
-{% else %}<tr><td colspan="5" class="empty">No audit events have been recorded yet.</td></tr>{% endfor %}
-</tbody></table></div>
-{% endblock %}
