@@ -1,6 +1,20 @@
-__pycache__/
-*.py[cod]
-instance/
+# Secrets and local configuration
 .env
+.env.local
+.env.production
+.env.development.local
+
+# Python
+__pycache__/
+*.pyc
 .venv/
 .pytest_cache/
+
+# JavaScript
+node_modules/
+/public/
+
+# Editor and OS
+.DS_Store
+.idea/
+.vscode/

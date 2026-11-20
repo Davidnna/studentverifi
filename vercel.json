@@ -1,5 +1,71 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "flask",
-  "buildCommand": "npm install --no-audit --no-fund && npm run build"
+    "$schema": "https://openapi.vercel.sh/vercel.json",
+    "framework": "flask",
+    "buildCommand": "npm install --include=dev --no-audit --no-fund && npm run build",
+    "rewrites": [
+        {
+            "source": "/login",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/register",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/dashboard",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/students",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/students/:segment",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/verify",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/registration-requests",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/logs",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/admin-audit",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/account/password",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/student/account",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/how-it-works",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/about",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/faq",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/privacy",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/contact",
+            "destination": "/index.html"
+        }
+    ]
 }

@@ -1,0 +1,23 @@
+name: Verify StudentVerifi
+
+on: [push, pull_request]
+
+jobs:
+    build-and-test:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+            - uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
+            - name: Install Python dependencies
+              run: python -m pip install -r requirements.txt
+            - name: Build React
+              run: npm install --include=dev --no-audit --no-fund && npm run build && npm run check
+            - name: Run regression tests
+              env:
+                  SECRET_KEY: test-only-secret-of-at-least-thirty-two-characters
+              run: python -m unittest discover -s tests -v
