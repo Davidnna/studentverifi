@@ -1,67 +1,20 @@
 {% extends "base.html" %}
-{% block title %}Create your student account · StudentVerifi{% endblock %}
+{% block title %}Request a student account · StudentVerifi{% endblock %}
 {% block content %}
-<section class="panel form-panel narrow-panel" aria-labelledby="register-title">
-  <h1 id="register-title">Request a student account</h1>
-  <p class="muted">Enter the details shown on your StudentVerifi record. An administrator will review your request before your account is activated.</p>
-  <form method="post" class="form-stack">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label for="matric_no">Matriculation number</label>
-    <input id="matric_no" name="matric_no" required maxlength="40" autocomplete="username" autocapitalize="characters">
-    <label for="first_name">First name</label>
-    <input id="first_name" name="first_name" required maxlength="100" autocomplete="given-name">
-    <label for="middle_name">Middle name (if applicable)</label>
-    <input id="middle_name" name="middle_name" maxlength="100" autocomplete="additional-name">
-    <label for="last_name">Surname</label>
-    <input id="last_name" name="last_name" required maxlength="100" autocomplete="family-name">
-    <label for="faculty_id">Faculty</label>
-    <select id="faculty_id" name="faculty_id" required>
-      <option value="">Select faculty</option>
-      {% for faculty in faculties %}<option value="{{ faculty.id }}">{{ faculty.name }}</option>{% endfor %}
-    </select>
-    <label for="department_id">Department</label>
-    <select id="department_id" name="department_id" required disabled>
-      <option value="">Select faculty first</option>
-      {% for department in departments %}
-        <option value="{{ department.id }}" data-faculty-id="{{ department.faculty_id }}">{{ department.name }}</option>
-      {% endfor %}
-    </select>
-    <label for="level">Level</label>
-    <select id="level" name="level" required>
-      <option value="">Select level</option>
-      {% for level in ["100", "200", "300", "400", "500", "600", "Postgraduate"] %}
-        <option value="{{ level }}">{{ level }}{% if level != "Postgraduate" %} Level{% endif %}</option>
-      {% endfor %}
-    </select>
-    <label for="password">Create password</label>
-    <input id="password" name="password" type="password" minlength="10" required autocomplete="new-password" aria-describedby="password-help">
-    <p class="fine-print" id="password-help">Use at least 10 characters.</p>
-    <label for="confirm_password">Confirm password</label>
-    <input id="confirm_password" name="confirm_password" type="password" minlength="10" required autocomplete="new-password">
-    <button class="btn primary full" type="submit">Submit account request</button>
-  </form>
-  <p class="fine-print">Matching details does not by itself prove identity. Account requests require administrator review.</p>
-  <p class="muted">Already have an account? <a href="{{ url_for('login') }}">Sign in</a>.</p>
-</section>
-<script>
-(function () {
-  const facultySelect = document.getElementById("faculty_id");
-  const departmentSelect = document.getElementById("department_id");
-  const options = Array.from(departmentSelect.options).filter(option => option.dataset.facultyId);
-
-  function updateDepartments() {
-    const facultyId = facultySelect.value;
-    departmentSelect.value = "";
-    departmentSelect.disabled = !facultyId;
-    options.forEach(option => {
-      option.hidden = option.dataset.facultyId !== facultyId;
-      option.disabled = option.dataset.facultyId !== facultyId;
-    });
-    departmentSelect.options[0].textContent = facultyId ? "Select department" : "Select faculty first";
-  }
-
-  facultySelect.addEventListener("change", updateDepartments);
-  updateDepartments();
-})();
-</script>
-{% endblock %}
+<section class="panel form-panel narrow-panel"><h1>Request a student account</h1>
+<p class="muted">Enter details that exactly match your StudentVerifi record. An administrator reviews each request.</p>
+<form method="post" class="form-stack"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>Matriculation number *<input name="matric_no" required value="{{ request.form.get('matric_no', '') }}" autocapitalize="characters"></label>
+<label>First name *<input name="first_name" required maxlength="100" value="{{ request.form.get('first_name', '') }}"></label>
+<label>Middle name (optional)<input name="middle_name" maxlength="100" value="{{ request.form.get('middle_name', '') }}"></label>
+<label>Surname *<input name="last_name" required maxlength="100" value="{{ request.form.get('last_name', '') }}"></label>
+{% include "_academic_selects.html" %}
+<label>Level *<select name="level" required><option value="">Select level</option>{% for value in ['100','200','300','400','500','600','Postgraduate'] %}<option value="{{ value }}" {% if request.form.get('level') == value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select></label>
+<label>Claim code (only if administrator issued one)<input name="claim_code" autocomplete="off" placeholder="Private one-time code"></label>
+<label>Create password *<input type="password" name="password" minlength="10" required autocomplete="new-password"></label>
+<label>Confirm password *<input type="password" name="confirm_password" minlength="10" required autocomplete="new-password"></label>
+<button class="btn primary full" type="submit">Submit account request</button>
+</form>
+<p class="fine-print">This is an academic prototype, not an official university identity service. Matching academic details does not itself establish identity.</p>
+<p class="muted">Already registered? <a href="{{ url_for('login') }}">Sign in</a>.</p>
+</section>{% endblock %}

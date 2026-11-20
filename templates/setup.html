@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block title %}Initial database setup · StudentVerifi{% endblock %}
+{% block content %}
+<section class="panel form-panel narrow-panel"><span class="eyebrow">RESTRICTED INITIALISATION</span><h1>Set up Neon database</h1>
+<p>This step creates the PostgreSQL tables and academic catalogue and creates the initial administrator (only if absent). It does not overwrite existing passwords.</p>
+<div class="notice">Only proceed for a new or inspected database. Remove SETUP_TOKEN from Vercel after completion and redeploy. Never share the setup token.</div>
+<form method="post" class="form-stack"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label for="setup_token">Private setup token</label><input id="setup_token" name="setup_token" type="password" required autocomplete="off" minlength="32">
+<button class="btn primary full" type="submit">Initialise database</button></form></section>
+{% endblock %}
