@@ -18,7 +18,11 @@ import {
     StudentAccount,
     Password,
     Cleanup,
-    Missing
+    Missing,
+    PublicCredential,
+    VerifierAccept,
+    VerifierManagement,
+    VerifierActivity
 } from './pages.js';
 import './style.css';
 
@@ -38,6 +42,9 @@ function App() {
                     info('contact'),
                     route('login', h(Login)),
                     route('register', h(Register)),
+                    route('credential', h(PublicCredential)),
+                    route('credential/:token', h(PublicCredential)),
+                    route('verifier/accept', h(VerifierAccept)),
                     h(Route, { element: h(Protected, { role: 'admin' }) },
                         route('dashboard', h(Dashboard)),
                         route('students', h(Students)),
@@ -45,10 +52,17 @@ function App() {
                         route('students/import', h(StudentImport)),
                         route('students/:id', h(StudentDetail)),
                         route('students/demo-cleanup', h(Cleanup)),
-                        route('verify', h(Verify)),
+                        route('verifiers', h(VerifierManagement)),
                         route('registration-requests', h(Requests)),
                         route('logs', h(Navigate, { to: '/verify', replace: true })),
                         route('admin-audit', h(AdminAudit))
+                    ),
+                    h(Route, { element: h(Protected, { roles: ['admin', 'verifier'] }) },
+                        route('verify', h(Verify))
+                    ),
+                    h(Route, { element: h(Protected, { role: 'verifier' }) },
+                        route('verifier/dashboard', h(Verify)),
+                        route('verifier/activity', h(VerifierActivity))
                     ),
                     h(Route, { element: h(Protected, { role: 'student' }) },
                         route('student/account', h(StudentAccount))

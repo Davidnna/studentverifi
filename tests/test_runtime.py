@@ -38,6 +38,8 @@ class FakeDatabase:
         query = statement.strip()
         if "FROM users WHERE username" in query or "FROM users WHERE id" in query:
             return Result([self.user])
+        if query.startswith('UPDATE users SET last_login_at'):
+            return Result([])
         if "FROM student_account_requests r" in query:
             return Result(self.requests)
         if "FROM admin_audit_logs a" in query:
@@ -82,7 +84,7 @@ class RuntimeTests(unittest.TestCase):
         original = index.read_bytes() if index.exists() else None
         try:
             index.write_text("<html>STUDENTVERIFI_VITE_BUILD React</html>")
-            for path in ("/login", "/dashboard", "/students/42", "/verify", "/registration-requests", "/logs", "/admin-audit"):
+            for path in ("/login", "/dashboard", "/students/42", "/verify", "/registration-requests", "/logs", "/admin-audit", "/credential", "/verifiers", "/verifier/activity", "/verifier/accept"):
                 with self.subTest(path=path):
                     result = self.client.get(path)
                     try:
@@ -170,7 +172,8 @@ class RuntimeTests(unittest.TestCase):
             json={"matric_no": ""},
             headers={"X-CSRFToken": token}
         )
-        self.assertEqual(accepted_by_csrf.status_code, 400)
+        self.assertEqual(accepted_by_csrf.status_code, 410)
+        self.assertIn("email-verified student account-claim", accepted_by_csrf.json["error"])
         self.assertNotIn("Security check expired", accepted_by_csrf.json["error"])
 
     def test_student_role_cannot_access_admin_api(self):

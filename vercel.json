@@ -74,6 +74,30 @@
         {
             "source": "/contact",
             "destination": "/index.html"
+        },
+        {
+            "source": "/verifiers",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/verifier/dashboard",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/verifier/activity",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/verifier/accept",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/credential/:token",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/credential",
+            "destination": "/index.html"
         }
     ],
     "functions": {

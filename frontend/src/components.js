@@ -26,7 +26,11 @@ const iconPaths = {
     book: ['M4 5.5A2.5 2.5 0 0 1 6.5 3H20v17H6.5A2.5 2.5 0 0 0 4 22z', 'M4 5.5v16.5', 'M8 7h8', 'M8 11h8'],
     search: ['M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16', 'm17 17 4 4'],
     check: ['m5 12 4 4L19 6'],
-    settings: ['M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8', 'M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.7 2.9-.2-.1a1.7 1.7 0 0 0-1.8.1l-.2.1h-3.4l-.1-.2a1.7 1.7 0 0 0-1.6-1l-.2.1-1.7-2.9.1-.2a1.7 1.7 0 0 0 0-1.8l-.1-.2V10l.2-.1a1.7 1.7 0 0 0 1-1.6l-.1-.2 2.9-1.7.2.1a1.7 1.7 0 0 0 1.8 0l.2-.1 2.9 1.7-.1.2a1.7 1.7 0 0 0 .1 1.8l.1.2v3.4z']
+    settings: ['M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8', 'M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.7 2.9-.2-.1a1.7 1.7 0 0 0-1.8.1l-.2.1h-3.4l-.1-.2a1.7 1.7 0 0 0-1.6-1l-.2.1-1.7-2.9.1-.2a1.7 1.7 0 0 0 0-1.8l-.1-.2V10l.2-.1a1.7 1.7 0 0 0 1-1.6l-.1-.2 2.9-1.7.2.1a1.7 1.7 0 0 0 1.8 0l.2-.1 2.9 1.7-.1.2a1.7 1.7 0 0 0 .1 1.8l.1.2v3.4z'],
+    verifier: ['M12 3 4 6v5c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6z', 'm8.5 12 2.2 2.2 4.8-5'],
+    mail: ['M4 5h16v14H4z', 'm4 7 8 6 8-6'],
+    camera: ['M4 7h3l2-2h6l2 2h3v12H4z', 'M12 10a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7'],
+    globe: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20', 'M2 12h20', 'M12 2a15 15 0 0 1 0 20', 'M12 2a15 15 0 0 0 0 20']
 };
 
 export function Icon({ name, size = 18 }) {
@@ -349,14 +353,26 @@ const adminGroups = [
         label: 'Verification',
         links: [
             ['/verify', 'Verification centre', 'verify'],
-            ['/registration-requests', 'Account requests', 'requests']
+            ['/registration-requests', 'Legacy request history', 'requests']
         ]
     },
     {
-        label: 'Administration',
+        label: 'Access management',
         links: [
+            ['/verifiers', 'Verifier accounts', 'verifier'],
             ['/admin-audit', 'Admin activity', 'audit'],
             ['/students/demo-cleanup', 'Test data', 'settings'],
+            ['/account/password', 'Account security', 'shield']
+        ]
+    }
+];
+
+const verifierGroups = [
+    {
+        label: 'Verification',
+        links: [
+            ['/verify', 'Verify a student', 'verify'],
+            ['/verifier/activity', 'My verification activity', 'history'],
             ['/account/password', 'Account security', 'shield']
         ]
     }
@@ -378,8 +394,11 @@ const routeTitles = {
     '/students/new': 'Add student',
     '/students/import': 'Import student records',
     '/verify': 'Verification centre',
-    '/registration-requests': 'Account requests',
+    '/registration-requests': 'Legacy request history',
     '/admin-audit': 'Administrative activity',
+    '/verifiers': 'Verifier accounts',
+    '/verifier/activity': 'My verification activity',
+    '/verifier/dashboard': 'Verifier workspace',
     '/account/password': 'Account security',
     '/student/account': 'My student card',
     '/students/demo-cleanup': 'Test data maintenance'
@@ -397,6 +416,31 @@ function Brand({ light = false }) {
         height: 40
     }));
 }
+
+function ScrollToTopButton() {
+    const [visible, setVisible] = useState(false);
+
+    useEffect(() => {
+        const updateVisibility = () => setVisible(window.scrollY > 320);
+        updateVisibility();
+        window.addEventListener('scroll', updateVisibility, { passive: true });
+        return () => window.removeEventListener('scroll', updateVisibility);
+    }, []);
+
+    if (!visible) return null;
+
+    return h('button', {
+        type: 'button',
+        className: 'scroll-to-top',
+        onClick: () => window.scrollTo({
+            top: 0,
+            behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+        }),
+        'aria-label': 'Scroll to top',
+        title: 'Scroll to top'
+    }, h(Icon, { name: 'arrow-up', size: 19 }));
+}
+
 
 function PublicShell() {
     const { user, loading, error } = useAuth();
@@ -444,10 +488,10 @@ function PublicShell() {
                         className: ({ isActive }) => 'public-nav-link' + (isActive ? ' is-active' : '')
                     }, label)),
                     !loading && (user
-                        ? h(Link, { to: user.role === 'admin' ? '/dashboard' : '/student/account', className: 'button button-primary' }, 'Open workspace')
+                        ? h(Link, { to: user.role === 'admin' ? '/dashboard' : user.role === 'verifier' ? '/verify' : '/student/account', className: 'button button-primary' }, 'Open workspace')
                         : h(React.Fragment, null,
                             h(Link, { to: '/login', className: 'public-signin' }, 'Sign in'),
-                            h(Link, { to: '/register', className: 'button button-primary' }, 'Student access request')
+                            h(Link, { to: '/register', className: 'button button-primary' }, 'Claim student account')
                         )
                     )
                 )
@@ -455,7 +499,7 @@ function PublicShell() {
         ),
         h('main', { id: 'public-main', className: 'public-main', tabIndex: -1 },
             error && h(Problem, { message: error }),
-            h(PageErrorBoundary, { key: location.pathname, fallbackTo: '/' }, h(Outlet))
+            h(PageErrorBoundary, { key: location.pathname, fallbackTo: '/' }, el('div', { className: 'page-transition' }, h(Outlet)))
         ),
         h('footer', { className: 'public-footer' },
             h('div', { className: 'public-footer-inner' },
@@ -474,14 +518,15 @@ function PublicShell() {
                     h('h2', null, 'Support'),
                     h(Link, { to: '/privacy' }, 'Privacy and responsible use'),
                     h(Link, { to: '/contact' }, 'Contact and support'),
-                    h(Link, { to: '/register' }, 'Request student access')
+                    h(Link, { to: '/register' }, 'Claim student account')
                 )
             ),
             h('div', { className: 'public-footer-bottom' },
                 h('span', null, '© ' + new Date().getFullYear() + ' StudentVerifi'),
                 h('span', null, 'Use only with authorised institutional records.')
             )
-        )
+        ),
+        h(ScrollToTopButton)
     );
 }
 
@@ -505,7 +550,7 @@ function DashboardShell() {
     const toggleRef = React.useRef(null);
     const navigate = useNavigate();
     const location = useLocation();
-    const groups = user?.role === 'admin' ? adminGroups : studentGroups;
+    const groups = user?.role === 'admin' ? adminGroups : user?.role === 'verifier' ? verifierGroups : studentGroups;
     const title = routeTitles[location.pathname] ||
         (location.pathname.startsWith('/students/') ? 'Student record' : 'Workspace');
 
@@ -635,8 +680,8 @@ function DashboardShell() {
                 h('div', { className: 'topbar-account' },
                     h('div', { className: 'account-avatar', 'aria-hidden': 'true' }, (user?.username || 'U').slice(0, 1).toUpperCase()),
                     h('div', { className: 'account-meta' },
-                        h('strong', null, user?.username || 'Account'),
-                        h('span', null, user?.role === 'admin' ? 'Administrator' : 'Student account')
+                        h('strong', null, user?.display_name || user?.username || 'Account'),
+                        h('span', null, user?.role === 'admin' ? 'Administrator' : user?.role === 'verifier' ? 'Authorised verifier' : 'Student account')
                     ),
                     h(Button, { variant: 'ghost', className: 'topbar-signout', onClick: signOut },
                         h(Icon, { name: 'logout', size: 17 }), h('span', null, 'Sign out')
@@ -645,13 +690,14 @@ function DashboardShell() {
             ),
             h('main', { id: 'workspace-main', className: 'workspace-content', tabIndex: -1 },
                 error && h(Problem, { message: error }),
-                h(PageErrorBoundary, { key: location.pathname, fallbackTo: user?.role === 'admin' ? '/dashboard' : '/student/account' }, h(Outlet))
+                h(PageErrorBoundary, { key: location.pathname, fallbackTo: user?.role === 'admin' ? '/dashboard' : user?.role === 'verifier' ? '/verify' : '/student/account' }, el('div', { className: 'page-transition' }, h(Outlet)))
             ),
             h('footer', { className: 'workspace-footer' },
                 h('span', null, 'StudentVerifi · Academic prototype'),
                 h('span', null, 'Use only with authorised student records and approved staff access.')
             )
-        )
+        ),
+        h(ScrollToTopButton)
     );
 }
 
@@ -662,6 +708,9 @@ const workspaceRoutes = [
     '/registration-requests',
     '/logs',
     '/admin-audit',
+    '/verifiers',
+    '/verifier/dashboard',
+    '/verifier/activity',
     '/student/account',
     '/account/password'
 ];
@@ -683,7 +732,7 @@ export function AppShell() {
     return user && isWorkspace ? h(DashboardShell) : h(PublicShell);
 }
 
-export function Protected({ role }) {
+export function Protected({ role, roles }) {
     const { user, loading, logout } = useAuth();
     const navigate = useNavigate();
 
@@ -696,11 +745,12 @@ export function Protected({ role }) {
             h(Link, { to: '/login', className: 'button button-primary' }, 'Sign in')
         );
     }
-    if (role && user.role !== role) {
+    const allowed = roles || (role ? [role] : null);
+    if (allowed && !allowed.includes(user.role)) {
         return h('div', { className: 'center-block access-message' },
             h('span', { className: 'access-icon' }, h(Icon, { name: 'shield', size: 28 })),
             h('h1', null, 'Use the correct account'),
-            h('p', null, `This page requires a ${role} account. Sign out before switching accounts.`),
+            h('p', null, `This page requires an authorised ${allowed.join(' or ')} account. Sign out before switching accounts.`),
             h(Button, {
                 onClick: async () => {
                     await logout();

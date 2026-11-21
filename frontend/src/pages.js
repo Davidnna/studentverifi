@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api, compactDate } from './api.js';
 import {
     h,
@@ -18,6 +18,7 @@ import {
 
 const el = (tag, props, ...children) => h(tag, props, ...children);
 const group = (...children) => h(React.Fragment, null, ...children);
+const workspacePath = (role) => role === 'admin' ? '/dashboard' : role === 'verifier' ? '/verify' : '/student/account';
 
 function useResource(path) {
     const [value, setValue] = useState(null);
@@ -82,13 +83,13 @@ export function Home() {
     const features = [
         ['verify', 'Confident identity checks', 'Scan a student QR credential or enter its code manually. The system checks the current record and returns a clear result.'],
         ['students', 'One organised student register', 'Search, review, update and import student records from a single protected workspace.'],
-        ['requests', 'Controlled student access', 'Students request access with a private one-time code. An administrator reviews each request before approval.'],
+        ['mail', 'Self-service account claiming', 'Students verify the email already associated with their record, upload a profile photograph and activate their account automatically.'],
         ['history', 'Accountable activity', 'Verification outcomes and important administrative actions are recorded for later review.']
     ];
     const steps = [
         ['01', 'Register the student', 'An authorised administrator adds a student record or imports a validated register.'],
-        ['02', 'Issue a private code', 'The administrator gives the correct student a one-time claim code to request account access.'],
-        ['03', 'Review account access', 'The student submits matching details. An administrator reviews the request before approving it.'],
+        ['02', 'Verify the registered email', 'The system sends a one-time code to the email address already associated with the student record.'],
+        ['03', 'Complete the student profile', 'The student uploads a photograph and creates a password. Account activation and QR generation then happen automatically.'],
         ['04', 'Verify when needed', 'An authorised verifier scans the QR credential and independently checks the person’s identity.']
     ];
 
@@ -168,7 +169,7 @@ export function Home() {
             el('div', { className: 'trust-points' },
                 ...[
                     ['shield', 'Access controls', 'Administrator and student functions are separated by account role.'],
-                    ['requests', 'Reviewed account requests', 'Student accounts remain subject to administrator approval.'],
+                    ['mail', 'Verified account claims', 'Email verification and mandatory profile completion protect student account activation.'],
                     ['audit', 'Activity records', 'Important verification and administrative actions can be reviewed.']
                 ].map(([icon, title, text]) => el('div', { className: 'trust-point', key: title },
                     el('span', { className: 'trust-point-icon' }, h(Icon, { name: icon, size: 20 })),
@@ -180,7 +181,7 @@ export function Home() {
             el('div', null,
                 el('p', { className: 'eyebrow eyebrow-light' }, 'STUDENTVERIFI'),
                 el('h2', null, 'Ready to access your workspace?'),
-                el('p', null, 'Administrators and authorised verifiers can sign in. Students can request access using a private claim code issued by an administrator.')
+                el('p', null, 'Administrators and authorised verifiers can sign in. Students can claim an existing record using its registered email address.')
             ),
             h(Link, { to: '/login', className: 'button button-light' }, 'Go to sign in', h(Icon, { name: 'arrow', size: 17 }))
         ),
@@ -195,9 +196,9 @@ const infoContent = {
         intro: 'StudentVerifi connects the student register, account access and QR-assisted identity checks in a controlled workflow.',
         sections: [
             ['students', '1. Maintain the student register', 'An administrator creates individual records or imports a validated CSV file from an authorised institutional source.'],
-            ['shield', '2. Issue a private claim code', 'When a student needs an account, an administrator issues a one-time code from the student record and shares it privately.'],
-            ['requests', '3. Submit and review account access', 'The student enters matching details and a password. The administrator reviews the request before approval.'],
-            ['verify', '4. Scan or enter a QR credential', 'An authorised verifier scans a QR credential using a phone camera or enters the code manually.'],
+            ['mail', '2. Verify the registered email', 'The student enters the matriculation number and email already stored on the record. A one-time code is sent to that address.'],
+            ['camera', '3. Complete the profile', 'The student uploads a profile photograph and creates a password. The account activates automatically after successful verification.'],
+            ['verify', '4. Scan or open the QR credential', 'An authorised verifier can scan from the workspace. A visitor outside the institution can use an ordinary phone camera to open a limited public verification result.'],
             ['history', '5. Review the outcome', 'The system reports the current record status and records verification activity for authorised review.']
         ],
         notice: 'A valid QR credential confirms a matching record. It does not establish that the person presenting it is the student. Always perform an independent identity check.'
@@ -208,8 +209,8 @@ const infoContent = {
         intro: 'StudentVerifi is a university-oriented academic prototype designed to make student record management and QR-assisted verification easier to organise.',
         sections: [
             ['book', 'Why it exists', 'Student identity checks can involve searching records, interpreting physical identification and recording outcomes. StudentVerifi brings the register and verification workflow into one web application.'],
-            ['students', 'Who uses it', 'Administrators manage records and account requests. Authorised verifiers use the scanning interface. Students with approved accounts can access their own student card and QR credential.'],
-            ['shield', 'How access is controlled', 'The application separates administrator and student functions. Student access requests require a private one-time claim code and administrator approval.'],
+            ['users', 'Who uses it', 'Administrators manage records and verifier access. Lecturers and authorised staff use separate verifier accounts. Students claim existing records and access their digital student card. External visitors can open limited QR verification results without an account.'],
+            ['shield', 'How access is controlled', 'The application separates administrator, verifier and student permissions. Public QR checks disclose only limited identity information. Students verify the email already stored on their record before activating an account.'],
             ['check', 'What it is not', 'StudentVerifi is not an official university identity authority by itself. Its reliability depends on authorised source records and appropriate institutional procedures.']
         ],
         notice: 'The prototype should be formally reviewed and authorised by the institution before it is used to make official student identity or eligibility decisions.'
@@ -221,7 +222,9 @@ const infoContent = {
         sections: [
             ['lock', 'Limit access', 'Only authorised administrators and verifiers should use functions that expose student records. Students should only access their own account information.'],
             ['user', 'Use accurate source records', 'Student information should come from an approved institutional source. Incorrect or outdated records can produce misleading verification results.'],
-            ['shield', 'Protect credentials', 'Passwords, private claim codes and QR credentials should not be shared publicly. Administrators should rotate credentials if they are compromised.'],
+            ['shield', 'Protect credentials', 'Passwords, email verification codes and QR credentials should not be shared publicly. Administrators should rotate credentials if they are compromised.'],
+            ['camera', 'Profile photographs', 'Student photographs are stored in private file storage and are served through application routes. New account claims require a photograph before QR credentials are issued.'],
+            ['globe', 'Public QR checks', 'A public QR check shows only the student name, masked matriculation number, institution, profile photograph and credential status. It does not expose email, telephone number, address or full academic record.'],
             ['history', 'Retain activity responsibly', 'The institution should define retention periods, access rights and procedures for handling correction or deletion requests.'],
             ['file', 'Institutional responsibility', 'Before genuine student data is loaded, the institution should approve the purpose of processing, provide an appropriate privacy notice and establish backups and retention procedures.']
         ],
@@ -232,22 +235,24 @@ const infoContent = {
         title: 'Contact and support',
         intro: 'For account access, student record corrections or verification concerns, contact the administrator responsible for your StudentVerifi installation.',
         sections: [
-            ['user', 'Student account access', 'Ask the administrator to confirm that your record is present and issue a private one-time claim code. If you have already submitted a request, wait for the review.'],
+            ['user', 'Student account access', 'Ask the administrator to confirm that your record and email address are correct. Then use the account-claim page to receive a one-time code at the email address on file.'],
             ['book', 'Student record correction', 'If your name, matriculation number, faculty, department or level is incorrect, ask an authorised administrator to check the source register.'],
             ['verify', 'QR and camera support', 'Allow camera access in your browser, select the rear camera where available and use manual entry if scanning is unavailable.'],
-            ['shield', 'Security concerns', 'Report a lost QR credential, suspected account access or incorrect verification outcome promptly. Never include a password or claim code in a support message.']
+            ['shield', 'Security concerns', 'Report a lost QR credential, suspected account access or incorrect verification outcome promptly. Never include a password or email verification code in a support message.']
         ],
         notice: 'No public support email or telephone number has been configured in this prototype. Use the institution’s approved support channel.'
     }
 };
 
 const faqItems = [
-    ['Can any student create an account?', 'No. The student must already have a record in the register, receive a private one-time claim code from an administrator and submit matching details. An administrator must approve the request before the account is activated.'],
-    ['What if I do not have a claim code?', 'Contact the administrator responsible for StudentVerifi. The administrator can issue a private code from your existing student record.'],
-    ['Why does the form say an account request is already pending?', 'A request for that student record has already been submitted and is awaiting administrator review. Do not submit another request. Contact the administrator if the request has been pending longer than expected.'],
+    ['Can any student create an account?', 'No. The student must already have a record in the register and access the email address stored on that record. After verifying the one-time code, uploading a photograph and creating a password, the account is activated automatically.'],
+    ['What if my email address is missing or incorrect?', 'Contact the administrator responsible for StudentVerifi and ask them to add or correct the email address on your existing student record.'],
+    ['Why can I not receive an account-claim code?', 'The matriculation number and email must match one unclaimed active student record. The email must be unique to that record. Contact the administrator if your email is missing, incorrect or shared with another student record.'],
     ['What if I already have an account?', 'Use the sign-in page with your matriculation number or account username and password. If you cannot access the account, contact the administrator.'],
     ['Why does my QR code not verify?', 'The student record may be inactive, the credential may have been rotated, or the code may not match a current record. Ask an authorised administrator to review it.'],
     ['Does scanning a valid QR code prove the holder is the student?', 'No. A QR scan checks the credential against the student register. The verifier must independently compare the person with approved identification or another reliable identity source.'],
+    ['Can someone outside the institution verify a student?', 'Yes. The person can scan the student QR code with an ordinary smartphone camera. The link opens a limited public result showing the student name, masked matriculation number, institution, photograph and credential status. No account is required.'],
+    ['Does a lecturer need administrator access to verify students?', 'No. An administrator can invite the lecturer as a verifier. A verifier can scan QR credentials and review their own verification activity but cannot manage student records or administrator settings.'],
     ['Can I use StudentVerifi on a phone?', 'Yes. The interface adapts to mobile screens. QR scanning requires a supported browser, camera permission and a secure HTTPS connection.']
 ];
 
@@ -271,7 +276,7 @@ export function InfoPage({ page }) {
             ),
             el('aside', { className: 'info-notice', role: 'note' },
                 h(Icon, { name: 'shield', size: 20 }),
-                el('p', null, 'For a question about a specific student record or account, contact the administrator for your installation. Do not share passwords or private claim codes.')
+                el('p', null, 'For a question about a specific student record or account, contact the administrator for your installation. Do not share passwords or email verification codes.')
             )
         );
     }
@@ -315,7 +320,7 @@ export function Login() {
         try {
             const result = await login(form.username, form.password);
             inform('Signed in successfully.');
-            navigate(result.role === 'admin' ? '/dashboard' : '/student/account', { replace: true });
+            navigate(workspacePath(result.role), { replace: true });
         } catch (requestError) {
             setError(requestError.message);
         } finally {
@@ -327,10 +332,10 @@ export function Login() {
         el('section', { className: 'auth-intro' },
             el('p', { className: 'eyebrow' }, 'YOUR SECURE WORKSPACE'),
             el('h1', null, 'Welcome back to StudentVerifi.'),
-            el('p', { className: 'lead' }, 'Sign in to continue to the student register, identity verification tools or your student card.'),
+            el('p', { className: 'lead' }, 'Sign in to continue to student records, authorised verification tools or your student card.'),
             el('div', { className: 'auth-benefits' },
                 ...[
-                    ['shield', 'Protected access', 'Your account role determines which workspace tools are available.'],
+                    ['shield', 'Protected access', 'Administrator, verifier and student accounts have separate permissions.'],
                     ['history', 'Clear activity records', 'Verification outcomes and administrative actions are recorded.'],
                     ['verify', 'Mobile-ready verification', 'Authorised verifiers can scan QR credentials from a supported phone browser.']
                 ].map(([icon, title, text]) => el('div', { className: 'auth-benefit', key: title },
@@ -344,9 +349,9 @@ export function Login() {
                 ? el('div', { className: 'form-stack' },
                     el('span', { className: 'auth-panel-icon' }, h(Icon, { name: 'user', size: 23 })),
                     el('h2', null, 'You are already signed in'),
-                    el('p', null, 'Signed in as ' + user.username + '.'),
+                    el('p', null, 'Signed in as ' + (user.display_name || user.username) + '.'),
                     h(Link, {
-                        to: user.role === 'admin' ? '/dashboard' : '/student/account',
+                        to: workspacePath(user.role),
                         className: 'button button-primary button-full'
                     }, 'Continue to workspace'),
                     h(Button, {
@@ -361,11 +366,11 @@ export function Login() {
                     el('div', { className: 'auth-panel-heading' },
                         el('p', { className: 'eyebrow' }, 'ACCOUNT ACCESS'),
                         el('h2', null, 'Sign in'),
-                        el('p', null, 'Use your administrator username or student matriculation number.')
+                        el('p', null, 'Administrators use their username, verifiers use their invited email address, and students use their matriculation number.')
                     ),
                     h(Problem, { message: error }),
                     h(Field, {
-                        label: 'Username or matriculation number',
+                        label: 'Username, email or matriculation number',
                         name: 'username',
                         autoComplete: 'username',
                         value: form.username,
@@ -382,42 +387,91 @@ export function Login() {
                         required: true
                     }),
                     h(Button, { type: 'submit', busy, className: 'button-full' }, 'Sign in securely'),
-                    el('p', { className: 'form-note' }, 'Student without an account? ', h(InlineLink, { to: '/register' }, 'Request access'))
+                    el('p', { className: 'form-note' }, 'Student without an account? ', h(InlineLink, { to: '/register' }, 'Claim your student account'))
                 )
         )
     );
 }
 
 export function Register() {
-    const initial = {
-        matric_no: '', first_name: '', middle_name: '', last_name: '',
-        faculty: '', department: '', level: '', claim_code: '', password: '', confirm: ''
-    };
-    const [form, setForm] = useState(initial);
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
+    const { setUser, inform } = useAuth();
+    const navigate = useNavigate();
+    const [step, setStep] = useState(1);
+    const [form, setForm] = useState({ matric_no: '', email: '', otp: '', password: '', confirm: '' });
+    const [photo, setPhoto] = useState(null);
+    const [preview, setPreview] = useState('');
     const [busy, setBusy] = useState(false);
-    const catalogue = useResource('/catalogue');
-    const departmentChoices = catalogue.value?.faculty_departments?.[form.faculty] || [];
+    const [error, setError] = useState('');
+    const [notice, setNotice] = useState('');
 
-    async function submit(event) {
+    useEffect(() => {
+        if (!photo) {
+            setPreview('');
+            return undefined;
+        }
+        const url = URL.createObjectURL(photo);
+        setPreview(url);
+        return () => URL.revokeObjectURL(url);
+    }, [photo]);
+
+    async function startClaim(event) {
         event.preventDefault();
         setError('');
-        setSuccess('');
+        setNotice('');
+        setBusy(true);
+        try {
+            const result = await api('/claim/start', {
+                method: 'POST',
+                body: { matric_no: form.matric_no, email: form.email }
+            });
+            setNotice(result.message);
+            setStep(2);
+        } catch (requestError) {
+            setError(requestError.message);
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    async function verifyCode(event) {
+        event.preventDefault();
+        setError('');
+        setBusy(true);
+        try {
+            const result = await api('/claim/verify', {
+                method: 'POST',
+                body: { matric_no: form.matric_no, otp: form.otp }
+            });
+            setNotice(result.message);
+            setStep(3);
+        } catch (requestError) {
+            setError(requestError.message);
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    async function completeClaim(event) {
+        event.preventDefault();
+        setError('');
+        if (!photo) {
+            setError('Upload a clear profile photograph before continuing.');
+            return;
+        }
         if (form.password !== form.confirm) {
             setError('The passwords do not match.');
             return;
         }
-        if (!catalogue.value) {
-            setError('The student catalogue is still loading. Please wait and try again.');
-            return;
-        }
-
+        const payload = new FormData();
+        payload.append('photo', photo);
+        payload.append('password', form.password);
+        payload.append('confirm', form.confirm);
         setBusy(true);
         try {
-            const result = await api('/register', { method: 'POST', body: form });
-            setSuccess(result.message);
-            setForm(initial);
+            const result = await api('/claim/complete', { method: 'POST', body: payload });
+            setUser(result.user);
+            inform(result.message);
+            navigate('/student/account', { replace: true });
         } catch (requestError) {
             setError(requestError.message);
         } finally {
@@ -428,13 +482,13 @@ export function Register() {
     return el('div', { className: 'registration-layout' },
         el('section', { className: 'registration-intro' },
             el('p', { className: 'eyebrow' }, 'STUDENT ACCOUNT ACCESS'),
-            el('h1', null, 'Request access to your student account.'),
-            el('p', { className: 'lead' }, 'If your student record is already in the register, you can request a personal account using a one-time claim code from your administrator.'),
+            el('h1', null, 'Claim your student account.'),
+            el('p', { className: 'lead' }, 'If your student record already exists, verify the email address on that record and complete your profile to activate your account.'),
             el('div', { className: 'registration-steps' },
                 ...[
-                    ['01', 'Ask for your claim code', 'Your administrator issues a private code from your existing student record.'],
-                    ['02', 'Enter matching details', 'Use the names, matriculation number, faculty, department and level shown on your record.'],
-                    ['03', 'Wait for approval', 'Your request is reviewed before your student account is activated.']
+                    ['01', 'Find your record', 'Enter your matriculation number and the email address already held in your student record.'],
+                    ['02', 'Verify your email', 'Enter the one-time code sent to the email address on file.'],
+                    ['03', 'Complete your profile', 'Upload a profile photograph and create your password. Your account and QR credential are then activated automatically.']
                 ].map(([number, title, text]) => el('div', { className: 'registration-step', key: number },
                     el('span', { className: 'registration-step-number' }, number),
                     el('div', null, el('strong', null, title), el('p', null, text))
@@ -442,53 +496,90 @@ export function Register() {
             ),
             el('div', { className: 'registration-note' },
                 h(Icon, { name: 'shield', size: 18 }),
-                el('p', null, 'This form does not create a new student record. It requests account access for a record that already exists.')
+                el('p', null, 'This process does not create a new student record. It only activates an account for a matching, existing student record.')
             )
         ),
         h(Panel, { className: 'registration-panel' },
-            success
-                ? el('div', { className: 'registration-success', role: 'status' },
-                    el('span', { className: 'success-icon' }, h(Icon, { name: 'check', size: 28 })),
-                    el('p', { className: 'eyebrow' }, 'REQUEST RECEIVED'),
-                    el('h2', null, 'Your request is in the review queue.'),
-                    el('p', null, success),
-                    el('p', { className: 'hint' }, 'You do not need to submit another request. Wait for the administrator to review it.'),
-                    h(Link, { to: '/login', className: 'button button-primary button-full' }, 'Return to sign in')
-                )
-                : el('form', { onSubmit: submit, className: 'form-stack' },
-                    el('div', { className: 'auth-panel-heading' },
-                        el('p', { className: 'eyebrow' }, 'NEW STUDENT ACCOUNT'),
-                        el('h2', null, 'Student access request'),
-                        el('p', null, 'Enter your information exactly as it appears in the student register.')
+            el('div', { className: 'claim-progress', 'aria-label': 'Account claim progress' },
+                ...['Student record', 'Email code', 'Profile'].map((label, index) => el('div', {
+                    className: 'claim-progress-step' + (step >= index + 1 ? ' is-current' : ''),
+                    key: label
+                },
+                    el('span', null, String(index + 1).padStart(2, '0')),
+                    el('small', null, label)
+                ))
+            ),
+            h(Problem, { message: error }),
+            notice && el('p', { className: 'alert alert-info', role: 'status' }, notice),
+            step === 1 && el('form', { onSubmit: startClaim, className: 'form-stack' },
+                el('div', { className: 'auth-panel-heading' },
+                    el('p', { className: 'eyebrow' }, 'STEP 1 OF 3'),
+                    el('h2', null, 'Find your student record'),
+                    el('p', null, 'The email address must match the one already associated with your student record.')
+                ),
+                h(Field, {
+                    label: 'Matriculation number', name: 'matric_no', required: true,
+                    value: form.matric_no, onChange: getInput(setForm, 'matric_no'),
+                    autoComplete: 'off', maxLength: 50, placeholder: 'Enter your matriculation number'
+                }),
+                h(Field, {
+                    label: 'Registered email address', name: 'email', type: 'email', required: true,
+                    value: form.email, onChange: getInput(setForm, 'email'),
+                    autoComplete: 'email', maxLength: 254, placeholder: 'Enter the email on your student record'
+                }),
+                h(Button, { type: 'submit', busy, className: 'button-full' }, 'Send verification code')
+            ),
+            step === 2 && el('form', { onSubmit: verifyCode, className: 'form-stack' },
+                el('div', { className: 'auth-panel-heading' },
+                    el('p', { className: 'eyebrow' }, 'STEP 2 OF 3'),
+                    el('h2', null, 'Verify your email'),
+                    el('p', null, 'Enter the six-digit code sent to the email address associated with your student record. The code expires after 10 minutes.')
+                ),
+                h(Field, {
+                    label: 'Six-digit verification code', name: 'otp', required: true,
+                    value: form.otp, onChange: getInput(setForm, 'otp'),
+                    inputMode: 'numeric', autoComplete: 'one-time-code', maxLength: 6,
+                    placeholder: '000000'
+                }),
+                h(Button, { type: 'submit', busy, className: 'button-full' }, 'Verify email'),
+                h(Button, { variant: 'outline', disabled: busy, onClick: () => setStep(1) }, 'Change email or matriculation number'),
+                h(Button, { variant: 'ghost', disabled: busy, onClick: startClaim }, 'Resend verification code')
+            ),
+            step === 3 && el('form', { onSubmit: completeClaim, className: 'form-stack' },
+                el('div', { className: 'auth-panel-heading' },
+                    el('p', { className: 'eyebrow' }, 'STEP 3 OF 3'),
+                    el('h2', null, 'Complete your student profile'),
+                    el('p', null, 'A profile photograph is required before your account and QR credential can be activated.')
+                ),
+                el('label', { className: 'photo-upload-field' },
+                    el('span', { className: 'photo-upload-preview' },
+                        preview
+                            ? el('img', { src: preview, alt: 'Selected profile photograph preview' })
+                            : h(Icon, { name: 'camera', size: 30 })
                     ),
-                    h(Problem, { message: error || catalogue.error }),
-                    el('div', { className: 'form-section' },
-                        el('h3', null, 'Your student record'),
-                        el('p', { className: 'form-section-copy' }, 'These details are checked against your existing record.'),
-                        h(Field, {
-                            label: 'Matriculation number', name: 'matric_no', required: true,
-                            value: form.matric_no, onChange: getInput(setForm, 'matric_no'),
-                            autoComplete: 'off', maxLength: 50, placeholder: 'Enter your matriculation number'
-                        }),
-                        el('div', { className: 'form-grid' },
-                            h(Field, { label: 'First name', name: 'first_name', required: true, value: form.first_name, onChange: getInput(setForm, 'first_name'), autoComplete: 'given-name' }),
-                            h(Field, { label: 'Middle name', name: 'middle_name', value: form.middle_name, onChange: getInput(setForm, 'middle_name'), autoComplete: 'additional-name', hint: 'Leave blank if your record has no middle name.' }),
-                            h(Field, { label: 'Surname', name: 'last_name', required: true, value: form.last_name, onChange: getInput(setForm, 'last_name'), autoComplete: 'family-name' }),
-                            h(Field, { label: 'Level', name: 'level', required: true, select: true, choices: ['100', '200', '300', '400', '500', '600'], value: form.level, onChange: getInput(setForm, 'level') }),
-                            h(Field, { label: 'Faculty', name: 'faculty', required: true, select: true, choices: catalogue.value?.faculties || [], value: form.faculty, onChange: (event) => setForm((current) => ({ ...current, faculty: event.target.value, department: '' })) }),
-                            h(Field, { label: 'Department', name: 'department', required: true, select: true, choices: departmentChoices, value: form.department, onChange: getInput(setForm, 'department'), disabled: !form.faculty || catalogue.loading })
-                        )
-                    ),
-                    el('div', { className: 'form-section' },
-                        el('h3', null, 'Verify and secure your account'),
-                        el('p', { className: 'form-section-copy' }, 'Your claim code confirms that the administrator has authorised this request.'),
-                        h(Field, { label: 'Private one-time claim code', name: 'claim_code', required: true, value: form.claim_code, onChange: getInput(setForm, 'claim_code'), autoComplete: 'off', maxLength: 128, hint: 'Ask your administrator to issue a code if you do not have one.' }),
-                        h(Field, { label: 'Create a password', name: 'password', type: 'password', minLength: 12, maxLength: 128, required: true, autoComplete: 'new-password', value: form.password, onChange: getInput(setForm, 'password'), hint: 'Use at least 12 characters.' }),
-                        h(Field, { label: 'Confirm password', name: 'confirm', type: 'password', required: true, autoComplete: 'new-password', value: form.confirm, onChange: getInput(setForm, 'confirm') })
-                    ),
-                    h(Button, { type: 'submit', busy, className: 'button-full', disabled: catalogue.loading || !catalogue.value }, 'Submit account request'),
-                    el('p', { className: 'form-note' }, 'Already have an account? ', h(InlineLink, { to: '/login' }, 'Sign in instead'))
-                )
+                    el('strong', null, photo ? photo.name : 'Choose your profile photograph'),
+                    el('small', null, 'JPEG, PNG or WebP · Maximum 2 MB · Clear face photograph'),
+                    el('input', {
+                        type: 'file',
+                        accept: 'image/jpeg,image/png,image/webp',
+                        required: true,
+                        onChange: (event) => setPhoto(event.target.files?.[0] || null)
+                    })
+                ),
+                h(Field, {
+                    label: 'Create a password', name: 'password', type: 'password',
+                    minLength: 12, maxLength: 128, required: true, autoComplete: 'new-password',
+                    value: form.password, onChange: getInput(setForm, 'password'),
+                    hint: 'Use at least 12 characters.'
+                }),
+                h(Field, {
+                    label: 'Confirm password', name: 'confirm', type: 'password',
+                    required: true, autoComplete: 'new-password',
+                    value: form.confirm, onChange: getInput(setForm, 'confirm')
+                }),
+                h(Button, { type: 'submit', busy, className: 'button-full' }, 'Activate my account')
+            ),
+            el('p', { className: 'form-note' }, 'Already have an account? ', h(InlineLink, { to: '/login' }, 'Sign in instead'))
         )
     );
 }
@@ -508,7 +599,7 @@ export function Dashboard() {
         h(TitleBlock, {
             eyebrow: 'ADMINISTRATOR OVERVIEW',
             title: 'Good to see you.',
-            description: 'A live overview of the student register, account requests and verification activity.',
+            description: 'A live overview of student records, account claims, verifier access and verification activity.',
             actions: h(Link, { className: 'button button-primary', to: '/verify' }, h(Icon, { name: 'verify', size: 17 }), 'Verify a student')
         }),
         h(Problem, { message: error }),
@@ -518,7 +609,9 @@ export function Dashboard() {
                 el('section', { className: 'stats-grid', 'aria-label': 'StudentVerifi statistics' },
                     h(Stat, { value: total.toLocaleString(), label: 'Students in register', icon: 'students', tone: 'blue', note: 'Total records' }),
                     h(Stat, { value: active.toLocaleString(), label: 'Active students', icon: 'check', tone: 'green', note: activeRate + '% active' }),
-                    h(Stat, { value: Number(value.pending || 0).toLocaleString(), label: 'Pending account requests', icon: 'requests', tone: 'amber', note: 'Awaiting review' }),
+                    h(Stat, { value: Number(value.unclaimed || 0).toLocaleString(), label: 'Unclaimed student records', icon: 'user', tone: 'amber', note: 'Awaiting student claim' }),
+                    h(Stat, { value: Number(value.claimed || 0).toLocaleString(), label: 'Claimed accounts', icon: 'check', tone: 'green', note: 'Student accounts' }),
+                    h(Stat, { value: Number(value.verifiers || 0).toLocaleString(), label: 'Active verifiers', icon: 'verifier', tone: 'blue', note: 'Authorised staff' }),
                     h(Stat, { value: Number(value.verifications || 0).toLocaleString(), label: 'Verification events', icon: 'history', tone: 'violet', note: 'Recorded checks' })
                 ),
                 el('section', { className: 'dashboard-main-grid' },
@@ -533,11 +626,13 @@ export function Dashboard() {
                                     el('thead', null, el('tr', null,
                                         el('th', { scope: 'col' }, 'Result'),
                                         el('th', { scope: 'col' }, 'Student / record'),
+                                        el('th', { scope: 'col' }, 'Verified by'),
                                         el('th', { scope: 'col' }, 'Date and time')
                                     )),
                                     el('tbody', null, ...recent.map((item) => el('tr', { key: item.id },
                                         el('td', null, h(Pill, { status: item.result })),
                                         el('td', null, el('strong', null, item.full_name || item.matric_no || 'Unmatched code'), el('span', { className: 'table-secondary' }, item.matric_no || 'No student record')),
+                                        el('td', null, item.verifier_name || (item.channel === 'public' ? 'Public visitor' : 'Former account')),
                                         el('td', null, compactDate(item.verified_at))
                                     )))
                                 )
@@ -558,9 +653,9 @@ export function Dashboard() {
                         h(Panel, { className: 'dashboard-panel request-summary' },
                             el('div', { className: 'request-summary-icon' }, h(Icon, { name: 'requests', size: 22 })),
                             el('p', { className: 'eyebrow' }, 'ACCOUNT ACCESS'),
-                            el('h2', null, Number(value.pending || 0).toLocaleString(), ' requests need review'),
-                            el('p', null, 'Review student account requests and approve access only after confirming the request is legitimate.'),
-                            h(Link, { to: '/registration-requests', className: 'button button-primary button-full' }, 'Open request queue')
+                            el('h2', null, Number(value.pending || 0).toLocaleString(), ' legacy requests'),
+                            el('p', null, 'Review historical claim-code requests created before automated email-based account claiming. New claims activate automatically after email and profile verification.'),
+                            h(Link, { to: '/registration-requests', className: 'button button-primary button-full' }, 'Open request history')
                         )
                     )
                 ),
@@ -628,7 +723,7 @@ export function Students() {
         h(TitleBlock, {
             eyebrow: 'STUDENT RECORDS',
             title: 'Student directory',
-            description: 'Search the register, review student details and manage each record.',
+            description: 'Search student records, monitor account-claim status and manage each record.',
             actions: group(
                 h(Link, { to: '/students/demo-cleanup', className: 'button button-outline' }, 'Test data'),
                 h(Link, { to: '/students/import', className: 'button button-outline' }, 'Import CSV'),
@@ -677,7 +772,7 @@ export function Students() {
                             el('table', null,
                                 el('thead', null,
                                     el('tr', null,
-                                        ...['Student', 'Matriculation number', 'Faculty / department', 'Level', 'Status', 'Action'].map((label) =>
+                                        ...['Student', 'Matriculation number', 'Faculty / department', 'Level', 'Record status', 'Account', 'Action'].map((label) =>
                                             el('th', { key: label, scope: 'col' }, label)
                                         )
                                     )
@@ -689,6 +784,7 @@ export function Students() {
                                         el('td', null, student.faculty + ' · ' + student.department),
                                         el('td', null, student.level),
                                         el('td', null, h(Pill, { status: student.status })),
+                                        el('td', null, h(Pill, { status: student.account_claimed ? 'Claimed' : student.email ? 'Unclaimed' : 'Email required' })),
                                         el('td', null, h(Link, {
                                             className: 'text-link',
                                             to: '/students/' + student.id
@@ -823,11 +919,12 @@ export function StudentForm() {
                         onChange: getInput(setForm, 'level')
                     }),
                     h(Field, {
-                        label: 'Email (optional)',
+                        label: 'Student email address',
                         name: 'email',
                         type: 'email',
                         value: form.email,
-                        onChange: getInput(setForm, 'email')
+                        onChange: getInput(setForm, 'email'),
+                        hint: 'The student receives an OTP here when claiming the existing record. Use a unique address where possible.'
                     })
                 ),
                 h(FormActions, null,
@@ -845,9 +942,13 @@ export function StudentDetail() {
     const { value, loading, error, reload } = useResource('/students/' + id);
     const [busy, setBusy] = useState(false);
     const [actionError, setActionError] = useState('');
-    const [claim, setClaim] = useState('');
+    const [email, setEmail] = useState('');
     const [qrVersion, setQrVersion] = useState(0);
     const student = value?.student;
+
+    useEffect(() => {
+        setEmail(student?.email || '');
+    }, [student?.email]);
 
     async function mutate(path, body, message) {
         setBusy(true);
@@ -855,9 +956,7 @@ export function StudentDetail() {
         try {
             const result = await api('/students/' + id + path, { method: 'POST', body });
             inform(message || result.message);
-            if (path === '/rotate-qr') {
-                setQrVersion((current) => current + 1);
-            }
+            if (path === '/rotate-qr') setQrVersion((current) => current + 1);
             reload();
             return result;
         } catch (requestError) {
@@ -868,21 +967,12 @@ export function StudentDetail() {
         }
     }
 
-    async function issueClaimCode() {
+    async function saveEmail(event) {
+        event.preventDefault();
         try {
-            const result = await mutate('/claim-code', {}, 'A private claim code has been issued.');
-            setClaim(result.code);
-        } catch (requestError) {
-            // The page displays the action error returned by mutate().
-        }
-    }
-
-    async function copyClaimCode() {
-        try {
-            await navigator.clipboard.writeText(claim);
-            inform('Claim code copied.');
-        } catch (requestError) {
-            inform('Copy was unavailable. Select and copy the code manually.', 'error');
+            await mutate('/email', { email }, 'Student email address updated.');
+        } catch {
+            // The mutation already exposes the inline error state.
         }
     }
 
@@ -902,17 +992,17 @@ export function StudentDetail() {
                         student.photo_url
                             ? el('img', {
                                 src: student.photo_url,
-                                alt: 'Student record photograph',
+                                alt: 'Student profile photograph',
                                 className: 'profile-image',
                                 referrerPolicy: 'no-referrer'
                             })
-                            : el('div', {
-                                className: 'profile-placeholder',
-                                'aria-hidden': 'true'
-                            }, (student.name || '?').slice(0, 1)),
+                            : el('div', { className: 'profile-placeholder', 'aria-hidden': 'true' },
+                                (student.name || '?').slice(0, 1)
+                            ),
                         el('div', null,
                             el('h2', null, student.name),
-                            h(Pill, { status: student.status })
+                            h(Pill, { status: student.status }),
+                            el('p', { className: 'muted' }, student.account_claimed ? 'Account claimed' : 'Account not yet claimed')
                         )
                     ),
                     el('dl', { className: 'detail-list' },
@@ -921,11 +1011,26 @@ export function StudentDetail() {
                         h(DetailRow, { label: 'Department', value: student.department }),
                         h(DetailRow, { label: 'Level', value: student.level }),
                         h(DetailRow, { label: 'Email', value: student.email }),
+                        h(DetailRow, { label: 'Email verified', value: student.email_verified_at ? compactDate(student.email_verified_at) : 'Not yet verified' }),
+                        h(DetailRow, { label: 'Account claimed', value: student.claimed_at ? compactDate(student.claimed_at) : 'Not yet claimed' }),
                         h(DetailRow, { label: 'Created', value: compactDate(student.created_at) })
+                    ),
+                    el('form', { className: 'form-stack email-maintenance-form', onSubmit: saveEmail },
+                        el('h3', null, 'Student email address'),
+                        h(Field, {
+                            label: 'Email on student record',
+                            name: 'email',
+                            type: 'email',
+                            required: false,
+                            value: email,
+                            onChange: (event) => setEmail(event.target.value),
+                            hint: 'The student must access this address to receive the one-time email verification code.'
+                        }),
+                        h(Button, { type: 'submit', busy, variant: 'outline' }, 'Save email address')
                     ),
                     h(ConfirmAction, {
                         title: (student.status === 'Active' ? 'Deactivate' : 'Activate') + ' student?',
-                        text: 'This changes whether the student QR credential verifies as active.',
+                        text: 'This changes whether the student credential can verify as active.',
                         busy,
                         dangerous: student.status === 'Active',
                         action: () => mutate('/status', {
@@ -935,37 +1040,37 @@ export function StudentDetail() {
                 ),
                 h(Panel, null,
                     el('h2', null, 'QR credential'),
-                    el('p', { className: 'muted' }, 'This unique QR credential is linked to the student record. Compare the person with authorised identity evidence.'),
-                    el('img', {
-                        className: 'qr-image',
-                        alt: 'Student QR code',
-                        src: '/api/students/' + id + '/qr.png?v=' + qrVersion
-                    }),
-                    el('div', { className: 'stacked-actions' },
-                        el('a', {
-                            className: 'button button-outline',
-                            href: '/api/students/' + id + '/qr.png',
-                            download: true
-                        }, 'Download QR'),
-                        h(ConfirmAction, {
-                            title: 'Rotate this QR credential?',
-                            text: 'The previous QR code will immediately stop working.',
-                            dangerous: true,
-                            busy,
-                            action: () => mutate('/rotate-qr', {}, 'Student QR credential refreshed.')
-                        }, 'Rotate QR credential'),
-                        h(Button, {
-                            variant: 'outline',
-                            busy,
-                            onClick: issueClaimCode
-                        }, 'Issue student claim code')
-                    ),
-                    claim && el('div', { className: 'claim-box', role: 'status' },
-                        el('strong', null, 'One-time claim code — copy it now'),
-                        el('code', null, claim),
-                        h(Button, { variant: 'outline', onClick: copyClaimCode }, 'Copy private code'),
-                        el('p', { className: 'hint' }, 'Share this code privately with the correct student. It will not be displayed again.')
-                    )
+                    student.has_qr
+                        ? group(
+                            el('p', { className: 'muted' }, 'This QR credential is available because the student has claimed the account and completed the profile photograph.'),
+                            el('img', {
+                                className: 'qr-image',
+                                alt: 'Student QR credential',
+                                src: '/api/students/' + id + '/qr.png?v=' + qrVersion
+                            }),
+                            el('div', { className: 'stacked-actions' },
+                                el('a', {
+                                    className: 'button button-outline',
+                                    href: '/api/students/' + id + '/qr.png?download=1',
+                                    download: true
+                                }, 'Download QR'),
+                                h(ConfirmAction, {
+                                    title: 'Rotate this QR credential?',
+                                    text: 'The previous QR code will immediately stop working.',
+                                    dangerous: true,
+                                    busy,
+                                    action: () => mutate('/rotate-qr', {}, 'Student QR credential refreshed.')
+                                }, 'Rotate QR credential')
+                            )
+                        )
+                        : el('div', { className: 'empty-qr-state' },
+                            h(Icon, { name: 'scan-qr-code', size: 34 }),
+                            el('h3', null, student.account_claimed ? 'Profile photograph required' : 'Awaiting student account claim'),
+                            el('p', null, student.account_claimed
+                                ? 'The student must upload a current photograph to private profile storage before a QR credential can be generated.'
+                                : 'No QR credential is generated when an administrator creates or imports a student record. The student receives one after verifying the registered email and completing the profile.'),
+                            !student.email && el('p', { className: 'notice' }, 'Add a valid email address to enable self-service account claiming.')
+                        )
                 )
             )
     );
@@ -1026,7 +1131,7 @@ export function StudentImport() {
                     accept: '.csv,text/csv',
                     required: true,
                     onChange: (event) => setFile(event.target.files?.[0] || null),
-                    hint: 'Only import authorised institutional records. Validate your file before uploading.'
+                    hint: 'Include the email column for self-service account claiming. Each student should have a unique email address. Only import authorised institutional records.'
                 }),
                 h(FormActions, null,
                     h(Link, { to: '/students', className: 'button button-outline' }, 'Cancel'),
@@ -1180,13 +1285,14 @@ function CameraReader({ onDetected }) {
 }
 
 export function Verify() {
+    const { user } = useAuth();
     const [token, setToken] = useState('');
     const [result, setResult] = useState(null);
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
     const [historyFilter, setHistoryFilter] = useState('ALL');
     const [historySearch, setHistorySearch] = useState('');
-    const history = useResource('/logs');
+    const history = useResource(user?.role === 'admin' ? '/logs' : '/verifier/activity');
 
     async function check(value) {
         setError('');
@@ -1285,7 +1391,7 @@ export function Verify() {
                             el('strong', null, result.student.name),
                             el('p', null, result.student.matric_no),
                             el('p', null, `${result.student.department} · ${result.student.level} level`),
-                            h(Link, {
+                            user?.role === 'admin' && h(Link, {
                                 to: '/students/' + result.student.id,
                                 className: 'text-link'
                             }, 'View student record')
@@ -1300,7 +1406,7 @@ export function Verify() {
                 el('div', null,
                     el('p', { className: 'eyebrow' }, 'VERIFIED ACTIVITY'),
                     el('h2', null, 'Verification history'),
-                    el('p', { className: 'muted' }, 'The latest 250 verification outcomes. QR credentials and reusable tokens are never displayed.')
+                    el('p', { className: 'muted' }, user?.role === 'admin' ? 'The latest 250 verification outcomes across administrators, verifiers and public visitors. Reusable QR tokens are never displayed.' : 'Your own recent verification outcomes. Reusable QR tokens are never displayed.')
                 ),
                 h(Button, {
                     variant: 'outline',
@@ -1314,7 +1420,8 @@ export function Verify() {
                     ['ALL', 'All checks', historyItems.length],
                     ['VALID', 'Valid', historyCounts.VALID || 0],
                     ['INACTIVE', 'Inactive', historyCounts.INACTIVE || 0],
-                    ['INVALID', 'Invalid', historyCounts.INVALID || 0]
+                    ['INVALID', 'Invalid', historyCounts.INVALID || 0],
+                    ['INCOMPLETE', 'Profile incomplete', historyCounts.INCOMPLETE || 0]
                 ].map(([key, label, count]) => el('div', {
                     className: 'verification-summary-item',
                     key
@@ -1329,7 +1436,8 @@ export function Verify() {
                         ['ALL', 'All'],
                         ['VALID', 'Valid'],
                         ['INACTIVE', 'Inactive'],
-                        ['INVALID', 'Invalid']
+                        ['INVALID', 'Invalid'],
+                        ['INCOMPLETE', 'Incomplete']
                     ].map(([key, label]) => h(Button, {
                         key,
                         variant: historyFilter === key ? 'primary' : 'outline',
@@ -1353,7 +1461,7 @@ export function Verify() {
                         el('table', null,
                             el('thead', null,
                                 el('tr', null,
-                                    ...['Outcome', 'Student', 'Matriculation number', 'Verifier', 'Date and time'].map((heading) =>
+                                    ...['Outcome', 'Student', 'Matriculation number', 'Verifier', 'Source', 'Date and time'].map((heading) =>
                                         el('th', { key: heading, scope: 'col' }, heading)
                                     )
                                 )
@@ -1364,6 +1472,7 @@ export function Verify() {
                                     el('td', null, item.student_name || 'Unmatched / unavailable record'),
                                     el('td', null, item.matric_no || '—'),
                                     el('td', null, item.verified_by_name || 'Former account'),
+                                    el('td', null, item.channel === 'public' ? 'Public' : item.channel === 'verifier' ? 'Verifier' : 'Staff'),
                                     el('td', null, compactDate(item.verified_at))
                                 ))
                             )
@@ -1423,8 +1532,8 @@ export function Requests() {
     return group(
         h(TitleBlock, {
             eyebrow: 'ACCOUNT ACCESS',
-            title: 'Registration requests',
-            description: 'Review new account requests and consult the complete approval and rejection history.',
+            title: 'Historical account requests',
+            description: 'Review historical claim-code requests created before automated email-based account claiming was introduced. New student claims are activated automatically after email verification and profile completion.',
             actions: h(Button, {
                 variant: 'outline',
                 onClick: reload,
@@ -1483,7 +1592,7 @@ export function Requests() {
                                 ? el('div', { className: 'actions request-actions' },
                                     h(ConfirmAction, {
                                         title: 'Reject this account request?',
-                                        text: `This will reject the account request for ${item.matric_no}. The student will need a new one-time claim code before submitting another request.`,
+                                        text: `This will reject the legacy account request for ${item.matric_no}. The student will need to contact the administrator to resolve the record before using the new self-service claim process.`,
                                         dangerous: true,
                                         busy: busy === item.id,
                                         action: () => decide(item.id, 'reject')
@@ -1497,7 +1606,7 @@ export function Requests() {
                                 )
                                 : el('div', { className: 'request-review-meta' },
                                     el('strong', null, item.status === 'Approved' ? 'Access approved' : 'Request rejected'),
-                                    el('span', null, 'Reviewed by ' + (item.reviewed_by_name || 'Former administrator')),
+                                    el('span', null, 'Decision recorded by ' + (item.reviewed_by_name || 'System')),
                                     el('span', null, compactDate(item.reviewed_at))
                                 )
                         )
@@ -1508,7 +1617,7 @@ export function Requests() {
                     text: searchTerm
                         ? 'No requests match the current search. Clear the search term or choose another status.'
                         : filter === 'All'
-                            ? 'Student account requests will appear here when submitted.'
+                            ? 'New student claims are activated automatically after email verification and profile completion. This page retains older claim-code request history.'
                             : 'There are no requests in this status.'
                 })
     );
@@ -1538,7 +1647,7 @@ export function AdminAudit() {
                         el('table', null,
                             el('thead', null,
                                 el('tr', null,
-                                    ...['Date and time', 'Administrator', 'Action', 'Target', 'Summary'].map((heading) =>
+                                    ...['Date and time', 'Actor', 'Action', 'Target', 'Summary'].map((heading) =>
                                         el('th', { key: heading, scope: 'col' }, heading)
                                     )
                                 )
@@ -1547,7 +1656,7 @@ export function AdminAudit() {
                                 ...items.map((item, index) => el('tr', { key: item.id || index },
                                     el('td', null, compactDate(item.created_at)),
                                     el('td', null, item.actor || 'Former account'),
-                                    el('td', null, el('strong', null, String(item.event || 'Activity').replaceAll('_', ' '))),
+                                    el('td', null, el('strong', null, String(item.event || 'Activity').replaceAll('_', ' ').replaceAll('.', ' '))),
                                     el('td', null, item.target_type
                                         ? `${item.target_type}${item.target_id ? ' #' + item.target_id : ''}`
                                         : '—'),
@@ -1565,33 +1674,97 @@ export function AdminAudit() {
 }
 
 export function StudentAccount() {
-    const { value, loading, error } = useResource('/student/me');
+    const { value, loading, error, reload } = useResource('/student/me');
+    const { inform } = useAuth();
+    const [photo, setPhoto] = useState(null);
+    const [preview, setPreview] = useState('');
+    const [busy, setBusy] = useState(false);
+    const [photoError, setPhotoError] = useState('');
     const student = value?.student;
+
+    useEffect(() => {
+        if (!photo) {
+            setPreview('');
+            return undefined;
+        }
+        const url = URL.createObjectURL(photo);
+        setPreview(url);
+        return () => URL.revokeObjectURL(url);
+    }, [photo]);
+
+    async function uploadPhoto(event) {
+        event.preventDefault();
+        setPhotoError('');
+        if (!photo) {
+            setPhotoError('Choose a profile photograph first.');
+            return;
+        }
+        const payload = new FormData();
+        payload.append('photo', photo);
+        setBusy(true);
+        try {
+            const result = await api('/student/profile-photo', { method: 'POST', body: payload });
+            inform(result.message);
+            setPhoto(null);
+            reload();
+        } catch (requestError) {
+            setPhotoError(requestError.message);
+        } finally {
+            setBusy(false);
+        }
+    }
 
     return group(
         h(TitleBlock, {
             eyebrow: 'STUDENT SPACE',
             title: 'My student card',
-            description: 'View your student details and access your QR credential when needed.',
+            description: 'Manage your profile photograph and access your QR credential.',
             actions: h(Link, { className: 'button button-outline', to: '/account/password' }, 'Change password')
         }),
-        h(Problem, { message: error }),
+        h(Problem, { message: error || photoError }),
         loading
             ? h(Spinner)
             : student && el('div', { className: 'two-col' },
                 h(Panel, null,
-                    el('h2', null, student.name),
-                    h(Pill, { status: student.status }),
+                    el('div', { className: 'student-heading' },
+                        student.photo_url
+                            ? el('img', { src: student.photo_url, alt: 'Your profile photograph', className: 'profile-image' })
+                            : el('div', { className: 'profile-placeholder', 'aria-hidden': 'true' }, (student.name || '?').slice(0, 1)),
+                        el('div', null,
+                            el('h2', null, student.name),
+                            h(Pill, { status: student.status }),
+                            el('p', { className: 'muted' }, student.photo_private ? 'Student-submitted photograph stored securely' : student.photo_available ? 'Existing photograph found; upload a new copy to enable QR verification' : 'Profile photograph required')
+                        )
+                    ),
                     el('dl', { className: 'detail-list' },
                         h(DetailRow, { label: 'Matriculation number', value: student.matric_no }),
                         h(DetailRow, { label: 'Faculty', value: student.faculty }),
                         h(DetailRow, { label: 'Department', value: student.department }),
                         h(DetailRow, { label: 'Level', value: student.level })
+                    ),
+                    el('form', { className: 'form-stack photo-update-form', onSubmit: uploadPhoto },
+                        el('h3', null, student.photo_private ? 'Update profile photograph' : 'Upload a profile photograph to enable QR verification'),
+                        el('label', { className: 'photo-upload-field' },
+                            el('span', { className: 'photo-upload-preview' },
+                                preview
+                                    ? el('img', { src: preview, alt: 'New photograph preview' })
+                                    : h(Icon, { name: 'camera', size: 28 })
+                            ),
+                            el('strong', null, photo ? photo.name : 'Choose a photograph'),
+                            el('small', null, 'JPEG, PNG or WebP · Maximum 2 MB'),
+                            el('input', {
+                                type: 'file',
+                                accept: 'image/jpeg,image/png,image/webp',
+                                required: true,
+                                onChange: (event) => setPhoto(event.target.files?.[0] || null)
+                            })
+                        ),
+                        h(Button, { type: 'submit', busy, disabled: !photo }, student.photo_available ? 'Update photograph' : 'Save photograph')
                     )
                 ),
                 h(Panel, null,
                     el('h2', null, 'My QR credential'),
-                    student.status === 'Active'
+                    student.has_qr
                         ? group(
                             el('img', {
                                 src: '/api/student/my-qr.png',
@@ -1599,13 +1772,17 @@ export function StudentAccount() {
                                 className: 'qr-image'
                             }),
                             el('a', {
-                                href: '/api/student/my-qr.png',
+                                href: '/api/student/my-qr.png?download=1',
                                 className: 'button button-primary',
                                 download: true
-                            }, 'Download my QR code')
+                            }, 'Download my QR code'),
+                            el('p', { className: 'hint' }, 'Your QR code opens a limited public verification page. Protect it and present it with your student identity evidence.')
                         )
-                        : el('p', { className: 'notice' }, 'Your QR credential is unavailable while your record is inactive.'),
-                    el('p', { className: 'hint' }, 'Protect this QR code. A verifier should still check your identity independently.')
+                        : el('div', { className: 'empty-qr-state' },
+                            h(Icon, { name: 'scan-qr-code', size: 34 }),
+                            el('h3', null, 'QR credential not yet available'),
+                            el('p', null, 'Your QR credential is generated only after your account is activated and a current profile photograph is stored privately.')
+                        )
                 )
             )
     );
@@ -1745,6 +1922,301 @@ export function Cleanup() {
                         }, 'Delete matching test records')
                     )
                 )
+        )
+    );
+}
+
+export function PublicCredential() {
+    const location = useLocation();
+    const { token: pathToken } = useParams();
+    const token = location.hash.replace(/^#/, '').trim() || pathToken || '';
+    const [result, setResult] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        if (!token) {
+            setResult(null);
+            setError('This verification link is incomplete. Scan a valid StudentVerifi QR code.');
+            setLoading(false);
+            return undefined;
+        }
+        const controller = new AbortController();
+        setLoading(true);
+        setError('');
+        api('/public/verify', {
+            method: 'POST',
+            body: { token },
+            signal: controller.signal
+        })
+            .then(setResult)
+            .catch((requestError) => {
+                if (requestError.name !== 'AbortError') setError(requestError.message);
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) setLoading(false);
+            });
+        return () => controller.abort();
+    }, [token]);
+
+    return el('section', { className: 'public-credential-page' },
+        el('div', { className: 'public-credential-heading' },
+            el('p', { className: 'eyebrow' }, 'STUDENTVERIFI PUBLIC CHECK'),
+            el('h1', null, 'Student credential verification'),
+            el('p', { className: 'lead' }, 'This page displays only the limited information needed for a basic credential check.')
+        ),
+        h(Panel, { className: 'public-credential-card' },
+            loading
+                ? h(Spinner, { label: 'Checking the student credential…' })
+                : error
+                    ? h(Problem, { message: error })
+                    : result && group(
+                        el('div', { className: 'public-credential-result' },
+                            h(Pill, { status: result.outcome }),
+                            el('h2', null, result.outcome === 'VALID' ? 'Credential is valid' : result.outcome === 'INACTIVE' ? 'Student record is inactive' : result.outcome === 'INCOMPLETE' ? 'Profile is incomplete' : 'Credential not recognised'),
+                            el('p', null, result.message)
+                        ),
+                        result.student && el('div', { className: 'public-credential-student' },
+                            result.student.photo_data
+                                ? el('img', { src: result.student.photo_data, alt: 'Student profile photograph', className: 'public-credential-photo' })
+                                : el('div', { className: 'public-credential-photo-placeholder' }, h(Icon, { name: 'user', size: 34 })),
+                            el('div', null,
+                                el('p', { className: 'eyebrow' }, result.student.institution),
+                                el('h2', null, result.student.name),
+                                el('p', null, 'Matriculation number: ' + result.student.matric_no_masked),
+                                el('p', null, 'Record status: ' + result.student.status)
+                            )
+                        ),
+                        el('p', { className: 'notice' }, 'A valid QR credential confirms a matching student record. The photograph is student-submitted and is not independently authenticated by facial recognition. It does not prove that the person presenting the code is the student. Compare the photograph with the person and request appropriate identification when necessary.'),
+                        el('p', { className: 'prototype-disclaimer' }, 'StudentVerifi is an academic software prototype and is not an official institutional verification service unless formally authorised by the institution.')
+                    )
+        ),
+        h(Link, { to: '/', className: 'text-link' }, 'Return to StudentVerifi')
+    );
+}
+
+export function VerifierAccept() {
+    const location = useLocation();
+    const navigate = useNavigate();
+    const { setUser, inform } = useAuth();
+    const token = new URLSearchParams(location.search).get('token') || location.hash.replace(/^#/, '').trim();
+    const [form, setForm] = useState({ password: '', confirm: '' });
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState('');
+
+    async function submit(event) {
+        event.preventDefault();
+        setError('');
+        if (!token) {
+            setError('The invitation link is incomplete. Ask the administrator to send a new invitation.');
+            return;
+        }
+        if (form.password !== form.confirm) {
+            setError('The passwords do not match.');
+            return;
+        }
+        setBusy(true);
+        try {
+            const result = await api('/verifier-invitations/accept', {
+                method: 'POST',
+                body: { token, password: form.password, confirm: form.confirm }
+            });
+            setUser(result.user);
+            inform(result.message);
+            navigate('/verify', { replace: true });
+        } catch (requestError) {
+            setError(requestError.message);
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    return el('div', { className: 'auth-layout verifier-invite-layout' },
+        el('section', { className: 'auth-intro' },
+            el('p', { className: 'eyebrow' }, 'AUTHORISED VERIFIER'),
+            el('h1', null, 'Set up your verification account.'),
+            el('p', { className: 'lead' }, 'Create a password to activate the verifier access granted by the StudentVerifi administrator.'),
+            el('div', { className: 'registration-note' },
+                h(Icon, { name: 'shield-check', size: 18 }),
+                el('p', null, 'Verifier accounts can check student credentials but cannot manage student records or access administrator functions.')
+            )
+        ),
+        h(Panel, { className: 'auth-panel' },
+            el('form', { className: 'form-stack', onSubmit: submit },
+                el('div', { className: 'auth-panel-heading' },
+                    el('p', { className: 'eyebrow' }, 'INVITATION ACCEPTANCE'),
+                    el('h2', null, 'Create your password'),
+                    el('p', null, 'This invitation can be used once and expires after 48 hours.')
+                ),
+                h(Problem, { message: error }),
+                h(Field, {
+                    label: 'Password', name: 'password', type: 'password', required: true,
+                    minLength: 12, maxLength: 128, autoComplete: 'new-password',
+                    value: form.password, onChange: getInput(setForm, 'password')
+                }),
+                h(Field, {
+                    label: 'Confirm password', name: 'confirm', type: 'password', required: true,
+                    minLength: 12, maxLength: 128, autoComplete: 'new-password',
+                    value: form.confirm, onChange: getInput(setForm, 'confirm')
+                }),
+                h(Button, { type: 'submit', busy, className: 'button-full', disabled: !token }, 'Activate verifier account')
+            )
+        )
+    );
+}
+
+export function VerifierManagement() {
+    const { inform } = useAuth();
+    const { value, loading, error, reload } = useResource('/verifiers');
+    const [form, setForm] = useState({ display_name: '', email: '' });
+    const [busy, setBusy] = useState(false);
+    const [actionError, setActionError] = useState('');
+    const [busyId, setBusyId] = useState(0);
+
+    async function invite(event) {
+        event.preventDefault();
+        setBusy(true);
+        setActionError('');
+        try {
+            const result = await api('/verifiers', { method: 'POST', body: form });
+            inform(result.message);
+            setForm({ display_name: '', email: '' });
+            reload();
+        } catch (requestError) {
+            setActionError(requestError.message);
+            reload();
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    async function changeStatus(item, isActive) {
+        setBusyId(item.id);
+        setActionError('');
+        try {
+            const result = await api('/verifiers/' + item.id + '/status', {
+                method: 'POST',
+                body: { is_active: isActive }
+            });
+            inform(result.message);
+            reload();
+        } catch (requestError) {
+            setActionError(requestError.message);
+        } finally {
+            setBusyId(0);
+        }
+    }
+
+    async function resend(item) {
+        setBusyId(item.id);
+        setActionError('');
+        try {
+            const result = await api('/verifiers/' + item.id + '/invite', { method: 'POST', body: {} });
+            inform(result.message);
+            reload();
+        } catch (requestError) {
+            setActionError(requestError.message);
+        } finally {
+            setBusyId(0);
+        }
+    }
+
+    const items = value?.items || [];
+    return group(
+        h(TitleBlock, {
+            eyebrow: 'ACCESS MANAGEMENT',
+            title: 'Verifier accounts',
+            description: 'Invite lecturers and authorised staff to verify student credentials without giving them administrator permissions.'
+        }),
+        h(Problem, { message: error || actionError }),
+        h(Panel, { className: 'form-panel' },
+            el('h2', null, 'Invite a verifier'),
+            el('form', { className: 'form-stack', onSubmit: invite },
+                el('div', { className: 'form-grid' },
+                    h(Field, {
+                        label: 'Staff member’s name', name: 'display_name', required: true,
+                        value: form.display_name, onChange: getInput(setForm, 'display_name')
+                    }),
+                    h(Field, {
+                        label: 'Staff email address', name: 'email', type: 'email', required: true,
+                        value: form.email, onChange: getInput(setForm, 'email')
+                    })
+                ),
+                h(Button, { type: 'submit', busy }, 'Send verifier invitation')
+            )
+        ),
+        h(Panel, null,
+            el('div', { className: 'panel-heading-row' },
+                el('div', null,
+                    el('p', { className: 'eyebrow' }, 'VERIFIER DIRECTORY'),
+                    el('h2', null, 'Invited and active verifiers'),
+                    el('p', { className: 'muted' }, 'Verifier accounts can scan and verify credentials only. They cannot access student administration.')
+                ),
+                h(Button, { variant: 'outline', onClick: reload, disabled: loading }, 'Refresh')
+            ),
+            loading
+                ? h(Spinner)
+                : items.length
+                    ? el('div', { className: 'table-scroll' },
+                        el('table', null,
+                            el('thead', null,
+                                el('tr', null, ...['Verifier', 'Email', 'Access', 'Last sign-in', 'Actions'].map((heading) => el('th', { key: heading, scope: 'col' }, heading)))
+                            ),
+                            el('tbody', null,
+                                ...items.map((item) => {
+                                    const accepted = Boolean(item.accepted_at);
+                                    const state = item.is_active ? 'Active' : accepted ? 'Suspended' : 'Invitation pending';
+                                    return el('tr', { key: item.id },
+                                        el('td', null, item.display_name || 'Verifier'),
+                                        el('td', null, item.email),
+                                        el('td', null, h(Pill, { status: state })),
+                                        el('td', null, compactDate(item.last_login_at)),
+                                        el('td', null,
+                                            el('div', { className: 'table-actions' },
+                                                !accepted && h(Button, { className: 'button-small', variant: 'outline', busy: busyId === item.id, onClick: () => resend(item) }, 'Resend invite'),
+                                                accepted && h(Button, { className: 'button-small', variant: 'outline', busy: busyId === item.id, onClick: () => changeStatus(item, !item.is_active) }, item.is_active ? 'Suspend' : 'Reactivate')
+                                            )
+                                        )
+                                    );
+                                })
+                            )
+                        )
+                    )
+                    : h(Empty, { title: 'No verifiers invited yet', text: 'Invite lecturers or authorised staff members to verify student credentials.' })
+        )
+    );
+}
+
+export function VerifierActivity() {
+    const { value, loading, error, reload } = useResource('/verifier/activity');
+    const items = value?.items || [];
+    return group(
+        h(TitleBlock, {
+            eyebrow: 'VERIFIER WORKSPACE',
+            title: 'My verification activity',
+            description: 'Review the student credential checks performed through your verifier account.'
+        }),
+        h(Problem, { message: error }),
+        h(Panel, null,
+            el('div', { className: 'panel-heading-row' },
+                el('div', null, el('h2', null, 'Recent checks'), el('p', { className: 'muted' }, 'Only your own verification activity is shown here.')),
+                h(Button, { variant: 'outline', onClick: reload, disabled: loading }, 'Refresh')
+            ),
+            loading
+                ? h(Spinner)
+                : items.length
+                    ? el('div', { className: 'table-scroll' },
+                        el('table', null,
+                            el('thead', null, el('tr', null, ...['Outcome', 'Student', 'Matriculation number', 'Date and time'].map((heading) => el('th', { key: heading, scope: 'col' }, heading)))),
+                            el('tbody', null, ...items.map((item) => el('tr', { key: item.id },
+                                el('td', null, h(Pill, { status: item.result })),
+                                el('td', null, item.student_name || 'Unavailable record'),
+                                el('td', null, item.matric_no || '—'),
+                                el('td', null, compactDate(item.verified_at))
+                            )))
+                        )
+                    )
+                    : h(Empty, { title: 'No verification activity yet', text: 'Your completed student checks will appear here.' })
         )
     );
 }

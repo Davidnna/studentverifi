@@ -2,6 +2,10 @@ name: Compile and verify StudentVerifi
 
 on:
     push:
+        branches:
+            - main
+            - master
+            - studentverifi-v3
 
 # Write access is used only for the follow-up commit containing compiled React assets.
 permissions:

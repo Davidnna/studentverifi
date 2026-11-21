@@ -133,7 +133,7 @@ export async function api(path, { method = 'GET', body, signal } = {}) {
         );
     }
 
-    if (path === '/session' && data.csrf_token) {
+    if (data.csrf_token) {
         setCsrf(data.csrf_token);
     }
     if (path === '/logout') {

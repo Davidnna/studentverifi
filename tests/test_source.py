@@ -99,14 +99,16 @@ class SourceContractTests(unittest.TestCase):
         self.assertIn("await refreshCsrf()", client)
         self.assertIn("CSRFProtect(app)", self.text("app.py"))
 
-    def test_student_registration_is_locked_and_rate_limited(self):
+    def test_legacy_registration_is_retired_and_new_claim_is_rate_limited(self):
         api = self.text("spa_api.py")
-        register = api[api.index("@api.post('/register')"):api.index("@api.get('/registration-requests')")]
-        self.assertIn("FOR UPDATE OF s", register)
-        self.assertIn("_rate_limit_remaining", register)
-        self.assertIn("_record_rate_limit_failure", register)
-        self.assertIn("claim_code_hash", register)
-        self.assertIn("len(password) < 12", register)
+        legacy = api[api.index("@api.post('/register')"):api.index("@api.get('/verifiers')")]
+        claim = api[api.index("@api.post('/claim/start')"):api.index("@api.post('/register')")]
+        self.assertIn("return err('The old approval-based registration form has been retired", legacy)
+        self.assertIn("FOR UPDATE", claim)
+        self.assertIn("_rate_limit_remaining", claim)
+        self.assertIn("_record_rate_limit_failure", claim)
+        self.assertIn("email_snapshot", claim)
+        self.assertIn("student['email'].strip().lower() == email", claim)
 
     def test_workspace_redesign_and_public_information_content(self):
         ui = self.text("frontend/src/components.js")
@@ -129,7 +131,8 @@ class SourceContractTests(unittest.TestCase):
         self.assertIn("const isWorkspace = isWorkspaceRoute(location.pathname)", ui)
         self.assertIn("return user && isWorkspace ? h(DashboardShell) : h(PublicShell)", ui)
         for path in ("'/dashboard'", "'/students'", "'/verify'", "'/registration-requests'",
-                     "'/admin-audit'", "'/student/account'", "'/account/password'"):
+                     "'/admin-audit'", "'/verifiers'", "'/verifier/dashboard'",
+                     "'/verifier/activity'", "'/student/account'", "'/account/password'"):
             self.assertIn(path, ui)
         self.assertIn("pathname.startsWith('/students/')", ui)
         self.assertIn("pathname.replace(/\\/+$/, '')", ui)
@@ -145,10 +148,11 @@ class SourceContractTests(unittest.TestCase):
         self.assertNotIn("WHERE r.status='Pending'", endpoint)
         self.assertIn("r.reviewed_at", endpoint)
         self.assertIn("r.reviewed_by", endpoint)
-        self.assertIn("reviewer.username AS reviewed_by_name", endpoint)
+        self.assertIn("AS reviewed_by_name", endpoint)
+        self.assertIn("Student self-service", endpoint)
         self.assertIn("['Approved', 'Approved']", pages)
         self.assertIn("['Rejected', 'Rejected']", pages)
-        self.assertIn("Reviewed by ", pages)
+        self.assertIn("Decision recorded by ", pages)
 
     def test_verification_history_is_consolidated(self):
         main = self.text("frontend/src/main.js")
@@ -157,7 +161,7 @@ class SourceContractTests(unittest.TestCase):
         api = self.text("spa_api.py")
         self.assertIn("route('logs', h(Navigate, { to: '/verify', replace: true }))", main)
         self.assertNotIn("['/logs', 'Verification history'", ui)
-        self.assertIn("const history = useResource('/logs')", pages)
+        self.assertIn("const history = useResource(user?.role === 'admin' ? '/logs' : '/verifier/activity')", pages)
         self.assertIn("s.full_name AS student_name", api)
         self.assertIn("VERIFIED ACTIVITY", pages)
 
@@ -166,9 +170,71 @@ class SourceContractTests(unittest.TestCase):
         pages = self.text("frontend/src/pages.js")
         api = self.text("spa_api.py")
         self.assertIn("export class PageErrorBoundary", ui)
-        self.assertIn("h(PageErrorBoundary, { key: location.pathname, fallbackTo: user?.role === 'admin' ? '/dashboard' : '/student/account' }, h(Outlet))", ui)
+        self.assertIn("fallbackTo: user?.role === 'admin' ? '/dashboard' : user?.role === 'verifier' ? '/verify' : '/student/account'", ui)
+        self.assertIn("className: 'page-transition'", ui)
         self.assertIn("export function AdminAudit()", pages)
         self.assertIn("a.target_type,a.target_id", api)
+
+    def test_automatic_email_claim_requires_private_profile_photo_before_qr(self):
+        api = self.text("spa_api.py")
+        app = self.text("app.py")
+        services = self.text("account_services.py")
+        pages = self.text("frontend/src/pages.js")
+        self.assertIn("@api.post('/claim/start')", api)
+        self.assertIn("@api.post('/claim/verify')", api)
+        self.assertIn("@api.post('/claim/complete')", api)
+        self.assertIn("email_snapshot", api)
+        self.assertIn("verify_otp(", api)
+        self.assertIn("process_profile_photo(", api)
+        self.assertIn("photo_blob_path=?,photo_url=NULL,token=?,claimed_at=?", api)
+        self.assertIn("ALTER TABLE students ALTER COLUMN token DROP NOT NULL", app)
+        self.assertIn("WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.student_id=s.id", app)
+        self.assertIn('access="private"', services)
+        self.assertIn("RESEND_API_KEY", services)
+        self.assertIn("MAX_PROFILE_PHOTO_BYTES = 2 * 1024 * 1024", services)
+        self.assertIn("/claim/complete", pages)
+        self.assertIn("profile photograph", pages)
+
+    def test_verifier_role_and_public_limited_verification(self):
+        api = self.text("spa_api.py")
+        app = self.text("app.py")
+        main = self.text("frontend/src/main.js")
+        ui = self.text("frontend/src/components.js")
+        pages = self.text("frontend/src/pages.js")
+        self.assertIn("role IN ('admin','student','verifier')", app)
+        self.assertIn("@api.post('/verifiers')", api)
+        self.assertIn("@api.post('/verifier-invitations/accept')", api)
+        self.assertIn("@protected(('admin', 'verifier'))", api)
+        self.assertEqual(api.count("def protected(role=None):"), 1)
+        self.assertIn("@api.post('/public/verify')", api)
+        self.assertIn("matric_no_masked", api)
+        self.assertIn("photo_data", api)
+        self.assertIn("/credential#{token}", api)
+        self.assertIn("NULL,?,'public'", api)
+        self.assertIn("route('credential'", main)
+        self.assertIn("VerifierManagement", main)
+        self.assertIn("verifierGroups", ui)
+        self.assertIn("PublicCredential", pages)
+        self.assertIn("location.hash.replace", pages)
+        self.assertIn("VerifierAccept", pages)
+
+    def test_student_email_is_supported_by_manual_and_bulk_entry(self):
+        api = self.text("spa_api.py")
+        pages = self.text("frontend/src/pages.js")
+        self.assertIn("'email'", api[api.index("@api.get('/students/import-template')"):api.index("@api.post('/students/import')")])
+        self.assertIn("label: 'Student email address'", pages)
+        self.assertIn("@api.post('/students/<int:student_id>/email')", api)
+        self.assertIn("student.email", pages)
+
+    def test_scroll_to_top_and_reduced_motion_page_transitions(self):
+        components = self.text("frontend/src/components.js")
+        css = self.text("frontend/src/style.css")
+        self.assertIn("function ScrollToTopButton()", components)
+        self.assertIn("'aria-label': 'Scroll to top'", components)
+        self.assertIn("window.scrollTo({", components)
+        self.assertIn("className: 'page-transition'", components)
+        self.assertIn("@media (prefers-reduced-motion: reduce)", css)
+        self.assertIn(".scroll-to-top:focus-visible", css)
 
     def test_no_public_authorisation_details(self):
         api = self.text("spa_api.py")
