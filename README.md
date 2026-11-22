@@ -1,4 +1,4 @@
-# StudentVerifi 3.1.4
+# StudentVerifi 3.1.5
 
 StudentVerifi is a web-based student-record and QR-assisted identity-verification application developed as an academic software prototype for Ebonyi State University (EBSU). It uses a React and React Router interface, a Flask JSON API, and PostgreSQL (including Neon PostgreSQL). It is not an official EBSU service unless the university formally authorises and adopts it.
 
@@ -216,3 +216,8 @@ StudentVerifi is an academic prototype. Before using genuine student records, ob
 Private profile photographs are now loaded by the React client through an authenticated same-origin fetch. The browser receives the image as a binary response and creates a temporary object URL for display. This avoids relying on a direct HTML image request to carry the authenticated application session. Object URLs are revoked when the component unmounts or the image changes. Failed requests display an accessible placeholder and a retry control rather than a broken-image alt-text icon. The Flask photo endpoint returns an explicit inline JPEG response with `nosniff`, private no-store caching, and a cookie variance header.
 
 The student dashboard, administrator student-detail page, and authenticated verifier result view use the same private-photo component. Public QR verification continues to use its existing limited public verification response.
+
+
+## Release 3.1.5 — preserve route-specific private-photo cache headers
+
+The global security-header hook now supplies its default `Cache-Control` policy only when a route has not already set one. This preserves the authenticated profile-photo endpoint's explicit `private, no-store, max-age=0` policy instead of overwriting it with the application-wide default. The existing runtime regression test checks the exact header returned by the authenticated student-photo route.
