@@ -2,6 +2,7 @@
 import os
 import sys
 import types
+import urllib.error
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -45,7 +46,7 @@ class FakeBlobClient:
 
 class PrivateBlobTests(unittest.TestCase):
     def setUp(self):
-        self.env = patch.dict(os.environ, {"BLOB_READ_WRITE_TOKEN": "test-private-token"})
+        self.env = patch.dict(os.environ, {"BLOB_READ_WRITE_TOKEN": "vercel_blob_rw_twrnsww5pe4g7xyp_test-secret"})
         self.env.start()
         self.addCleanup(self.env.stop)
         FakeBlobClient.closed = False
@@ -70,14 +71,83 @@ class PrivateBlobTests(unittest.TestCase):
         self.assertEqual(FakeBlobClient.upload_options["access"], "private")
         self.assertEqual(FakeBlobClient.upload_options["content_type"], "image/jpeg")
         self.assertTrue(FakeBlobClient.upload_options["add_random_suffix"])
-        self.assertEqual(FakeBlobClient.client_token, "test-private-token")
+        self.assertEqual(FakeBlobClient.client_token, "vercel_blob_rw_twrnsww5pe4g7xyp_test-secret")
         self.assertTrue(FakeBlobClient.closed)
 
-    def test_private_photo_retrieval_uses_private_access(self):
-        result = read_private_profile_photo("student-profiles/17/photo.jpg")
-        self.assertEqual(result, b"student-photo-bytes")
-        self.assertEqual(FakeBlobClient.get_options["access"], "private")
-        self.assertEqual(FakeBlobClient.client_token, "test-private-token")
+    def test_private_photo_retrieval_uses_authenticated_store_url(self):
+        image = b"\xff\xd8\xff" + b"processed-jpeg"
+
+        class Response:
+            status = 200
+            headers = {"Content-Type": "image/jpeg"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, traceback):
+                return False
+
+            def read(self, limit):
+                self.limit = limit
+                return image
+
+        with patch("account_services.urllib.request.urlopen", return_value=Response()) as download:
+            result = read_private_profile_photo("student-profiles/17/photo.jpg")
+
+        self.assertEqual(result, image)
+        request = download.call_args.args[0]
+        self.assertEqual(
+            request.full_url,
+            "https://twrnsww5pe4g7xyp.private.blob.vercel-storage.com/student-profiles/17/photo.jpg",
+        )
+        self.assertEqual(request.get_header("Authorization"),
+                         "Bearer vercel_blob_rw_twrnsww5pe4g7xyp_test-secret")
+        self.assertEqual(request.get_header("Accept"), "image/jpeg")
+        self.assertEqual(download.call_args.kwargs["timeout"], 15)
+
+    def test_private_photo_retrieval_handles_not_found(self):
+        error = urllib.error.HTTPError("https://blob.invalid/photo.jpg", 404, "Not Found", {}, None)
+        with patch("account_services.urllib.request.urlopen", side_effect=error):
+            self.assertIsNone(read_private_profile_photo("student-profiles/17/photo.jpg"))
+
+    def test_private_photo_retrieval_rejects_access_denied(self):
+        error = urllib.error.HTTPError("https://blob.invalid/photo.jpg", 403, "Forbidden", {}, None)
+        with patch("account_services.urllib.request.urlopen", side_effect=error):
+            with self.assertRaises(PhotoStorageError) as caught:
+                read_private_profile_photo("student-profiles/17/photo.jpg")
+        self.assertEqual(caught.exception.reason, "blob_access_denied")
+
+    def test_private_photo_retrieval_rejects_invalid_jpeg(self):
+        class Response:
+            status = 200
+            headers = {"Content-Type": "image/jpeg"}
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self, limit): return b"not-an-image"
+
+        with patch("account_services.urllib.request.urlopen", return_value=Response()):
+            with self.assertRaises(PhotoStorageError) as caught:
+                read_private_profile_photo("student-profiles/17/photo.jpg")
+        self.assertEqual(caught.exception.reason, "blob_invalid_response")
+
+    def test_private_photo_retrieval_enforces_maximum_size(self):
+        class Response:
+            status = 200
+            headers = {"Content-Type": "image/jpeg"}
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self, limit): return b"\xff\xd8\xff" + (b"x" * limit)
+
+        with patch("account_services.urllib.request.urlopen", return_value=Response()):
+            with self.assertRaises(PhotoStorageError) as caught:
+                read_private_profile_photo("student-profiles/17/photo.jpg")
+        self.assertEqual(caught.exception.reason, "blob_invalid_response")
+
+    def test_private_photo_retrieval_rejects_invalid_store_token(self):
+        with patch.dict(os.environ, {"BLOB_READ_WRITE_TOKEN": "not-a-vercel-blob-token"}):
+            with self.assertRaises(PhotoStorageError) as caught:
+                read_private_profile_photo("student-profiles/17/photo.jpg")
+        self.assertEqual(caught.exception.reason, "blob_token_format_invalid")
 
     def test_delete_only_accepts_student_profile_paths(self):
         delete_private_profile_photo("student-profiles/17/photo.jpg")
@@ -103,6 +173,8 @@ class PrivateBlobTests(unittest.TestCase):
     def test_photo_read_rejects_paths_outside_student_folder(self):
         with self.assertRaises(PhotoStorageError):
             read_private_profile_photo("public/photo.jpg")
+        with self.assertRaises(PhotoStorageError):
+            read_private_profile_photo("student-profiles/17/../../private.jpg")
 
 
 if __name__ == "__main__":

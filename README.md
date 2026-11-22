@@ -1,4 +1,4 @@
-# StudentVerifi 3.1.5
+# StudentVerifi 3.1.6
 
 StudentVerifi is a web-based student-record and QR-assisted identity-verification application developed as an academic software prototype for Ebonyi State University (EBSU). It uses a React and React Router interface, a Flask JSON API, and PostgreSQL (including Neon PostgreSQL). It is not an official EBSU service unless the university formally authorises and adopts it.
 
@@ -98,12 +98,12 @@ The server sends HTML messages to `POST /v3/domains/{domain_name}/messages/send`
 4. Connect the store to the StudentVerifi project and select the environments that need access.
 5. Vercel supplies `BLOB_READ_WRITE_TOKEN` to the connected project. Confirm that it is present for Production and Preview as required. Do not expose it to the browser or commit it.
 
-The application reads and writes photographs through authenticated server-side Blob SDK operations. Release 3.1.4 pins the official `vercel==0.5.7` Python SDK, which documents `AsyncBlobClient` and constructor-based token authentication. Both dependency manifests use the same pin. The client is explicitly authenticated and closed; uploads and retrieval require private access. The existing GitHub Actions test suite now checks the real installed SDK import and call signatures without contacting the store. These tests do not verify a live upload. Upload failures are logged using safe diagnostic codes rather than provider response bodies. In Vercel Logs, filter for `Student claim photo upload failed` or `Photo storage operation=upload`:
+The application uploads and deletes photographs through the authenticated Vercel Blob SDK. Private photograph reads use Vercel’s documented direct HTTPS delivery endpoint with the store read/write token in the server-side `Authorization: Bearer` header. The endpoint validates the stored student-profile path, enforces JPEG content type and size limits, and never exposes the token to the browser. Release 3.1.6 uses the official `vercel==0.5.7` Python SDK for private uploads and deletions. The client is explicitly authenticated and closed. Private reads use the documented HTTPS Bearer-token endpoint rather than the SDK response stream, while the store remains private. The existing GitHub Actions test suite checks the installed SDK upload/delete contract and the authenticated HTTP retrieval contract without contacting the live store. These tests do not verify a live upload or download. Upload failures are logged using safe diagnostic codes rather than provider response bodies. In Vercel Logs, filter for `Student claim photo upload failed` or `Photo storage operation=upload`:
 
 - `missing_blob_token`: check that the read/write token is present in the exact deployment environment, and redeploy after changing it.
 - `blob_access_denied`: check the token belongs to the connected Private store and has write access.
 - `blob_sdk_incompatible`: check the installed SDK version in the diagnostic log; verify `vercel==0.5.7` was installed in the deployed function, and that the real-SDK test passed in GitHub Actions. If necessary redeploy the corrected generated-assets commit without reusing the build cache.
-- `blob_timeout`, `blob_store_unavailable`, `blob_provider_error` or `blob_invalid_response`: check store availability and the provider request's status. Do not share secrets or raw provider exception messages.
+- `blob_timeout`, `blob_network_error`, `blob_store_unavailable`, `blob_provider_error`, `blob_http_error`, `blob_content_type_invalid`, `blob_invalid_response` or `blob_not_found`: check store availability and the provider request's status. Do not share secrets or raw provider exception messages.
 
 The student-facing error remains generic. If a claim expires while troubleshooting, restart the claim and request a new code. No account or QR is created until the photograph has been stored and account activation completes.
 
@@ -217,6 +217,10 @@ Private profile photographs are now loaded by the React client through an authen
 
 The student dashboard, administrator student-detail page, and authenticated verifier result view use the same private-photo component. Public QR verification continues to use its existing limited public verification response.
 
+
+## Release 3.1.6 — use direct authenticated HTTP for private photo retrieval
+
+Private photo reads no longer depend on the Python SDK response-stream object. The application derives the private Blob host from the server-side read/write token, requests the stored path over HTTPS with a Bearer authorization header, and validates the response content type, JPEG signature and maximum size. Upload and deletion continue to use the pinned Vercel SDK. Regression tests cover the URL, authentication header, not-found and access-denied responses, invalid image data, size limits and unsafe paths.
 
 ## Release 3.1.5 — preserve route-specific private-photo cache headers
 

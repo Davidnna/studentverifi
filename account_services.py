@@ -12,7 +12,7 @@ import re
 import secrets
 import urllib.error
 import urllib.request
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 from io import BytesIO
 
 
@@ -351,37 +351,96 @@ def upload_private_profile_photo(student_id, image_bytes):
         raise _blob_error("upload", error) from None
 
 
+def _private_blob_download_url(pathname, token):
+    """Build the documented private Blob delivery URL from the store token."""
+    token_prefix = "vercel_blob_rw_"
+    if not token.startswith(token_prefix):
+        raise PhotoStorageError("Private photo storage credentials are invalid.", "blob_token_format_invalid")
+
+    token_remainder = token[len(token_prefix):]
+    store_id, separator, secret = token_remainder.partition("_")
+    if not separator or not secret or not re.fullmatch(r"[a-z0-9-]{1,64}", store_id):
+        raise PhotoStorageError("Private photo storage credentials are invalid.", "blob_token_format_invalid")
+
+    path = str(pathname or "")
+    segments = path.split("/")
+    if (
+        len(segments) != 3
+        or segments[0] != "student-profiles"
+        or not segments[1].isdigit()
+        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,180}", segments[2])
+        or segments[2] in {".", ".."}
+    ):
+        raise PhotoStorageError("The requested profile photograph is unavailable.", "blob_path_invalid")
+
+    encoded_path = quote(path, safe="/-._~")
+    return f"https://{store_id}.private.blob.vercel-storage.com/{encoded_path}"
+
+
 def read_private_profile_photo(pathname):
-    if not pathname or not str(pathname).startswith("student-profiles/"):
-        raise PhotoStorageError("The requested profile photograph is unavailable.")
+    """Read a private photograph using Vercel's documented Bearer-token HTTP access."""
+    token = _blob_token()
+    url = _private_blob_download_url(pathname, token)
+    blob_request = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "image/jpeg",
+        },
+        method="GET",
+    )
+
     try:
-        token = _blob_token()
-        from vercel.blob import AsyncBlobClient
+        with urllib.request.urlopen(blob_request, timeout=15) as response:
+            status = getattr(response, "status", None) or response.getcode()
+            if status != 200:
+                logging.getLogger(__name__).warning(
+                    "Photo storage operation=read reason=blob_http_status status=%s", status
+                )
+                return None
 
-        async def retrieve():
-            client = AsyncBlobClient(token=token)
-            try:
-                result = await asyncio.wait_for(client.get(str(pathname), access="private"), timeout=15)
-                if result is None or getattr(result, "status_code", 0) != 200 or result.stream is None:
-                    return None
+            content_type = (response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower())
+            if content_type not in {"image/jpeg", "image/jpg"}:
+                logging.getLogger(__name__).warning(
+                    "Photo storage operation=read reason=blob_content_type_invalid content_type=%s",
+                    content_type or "missing",
+                )
+                raise PhotoStorageError(
+                    "The stored profile photograph has an invalid content type.",
+                    "blob_content_type_invalid",
+                )
 
-                async def collect():
-                    data = bytearray()
-                    async for chunk in result.stream:
-                        data.extend(chunk)
-                        if len(data) > MAX_PROFILE_PHOTO_BYTES:
-                            raise PhotoStorageError("Stored photograph is too large.", "blob_invalid_response")
-                    return bytes(data)
+            image_bytes = response.read(MAX_PROFILE_PHOTO_BYTES + 1)
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            logging.getLogger(__name__).warning(
+                "Photo storage operation=read reason=blob_not_found status=404"
+            )
+            return None
+        if error.code in {401, 403}:
+            reason = "blob_access_denied"
+        else:
+            reason = "blob_http_error"
+        logging.getLogger(__name__).warning(
+            "Photo storage operation=read reason=%s status=%s", reason, error.code
+        )
+        raise PhotoStorageError(
+            "Private photo storage is temporarily unavailable.", reason
+        ) from None
+    except (TimeoutError, urllib.error.URLError, OSError) as error:
+        reason = "blob_timeout" if isinstance(error, TimeoutError) else "blob_network_error"
+        logging.getLogger(__name__).warning(
+            "Photo storage operation=read reason=%s exception=%s", reason, type(error).__name__
+        )
+        raise PhotoStorageError(
+            "Private photo storage is temporarily unavailable.", reason
+        ) from None
 
-                return await asyncio.wait_for(collect(), timeout=15)
-            finally:
-                await _close_blob_client(client)
-
-        return asyncio.run(retrieve())
-    except PhotoStorageError:
-        raise
-    except Exception as error:
-        raise _blob_error("read", error) from None
+    if len(image_bytes) > MAX_PROFILE_PHOTO_BYTES:
+        raise PhotoStorageError("The stored photograph is too large.", "blob_invalid_response")
+    if not image_bytes or not image_bytes.startswith(b"\xff\xd8\xff"):
+        raise PhotoStorageError("The stored profile photograph is not a valid JPEG.", "blob_invalid_response")
+    return image_bytes
 
 
 def delete_private_profile_photo(pathname):
