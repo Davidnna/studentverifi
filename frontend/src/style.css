@@ -1482,7 +1482,7 @@ textarea:focus-visible, summary:focus-visible {
     .request-actions .button { flex: 1; }
 }
 
-/* StudentVerifi 3.0 account-claim and verifier experience */
+/* StudentVerifi 3.1 account-claim and verifier experience */
 .claim-progress {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -25,6 +25,7 @@ from account_services import (
     PhotoStorageError,
     create_otp,
     delete_private_profile_photo,
+    email_delivery_is_configured,
     otp_digest,
     process_profile_photo,
     read_private_profile_photo,
@@ -769,7 +770,7 @@ def start_student_claim():
     )
     if not matric_no or not email or not b.valid_email(email):
         return err('Enter a valid matriculation number and email address.')
-    if not os.environ.get('RESEND_API_KEY') or not os.environ.get('MAIL_FROM'):
+    if not email_delivery_is_configured():
         return err('Email verification is not configured yet. Please contact the system administrator.', 503)
 
     try:
@@ -854,7 +855,7 @@ def start_student_claim():
         except EmailDeliveryError:
             with b.get_db() as db:
                 db.execute('UPDATE student_claim_challenges SET consumed_at=? WHERE id=?', (b.now(), challenge_id))
-            b.app.logger.exception('Student claim OTP delivery failed')
+            b.app.logger.exception('Student claim OTP delivery through Nylas failed')
             return err('The verification email could not be sent. Please try again later or contact the administrator.', 503)
         return ok(message=generic_message)
     except SQLAlchemyError:
@@ -1125,8 +1126,8 @@ def create_verifier():
         try:
             send_verifier_invitation(email, display_name, invitation_url, invitation_id)
         except EmailDeliveryError:
-            b.app.logger.exception('Verifier invitation email failed')
-            return err('The verifier account was created, but its invitation email could not be delivered. Use Resend invitation to try again.', 503, verifier_id=user_id)
+            b.app.logger.exception('Verifier invitation email through Nylas failed')
+            return err('The verifier account was created, but its invitation email could not be delivered. Use the invitation resend action to try again.', 503, verifier_id=user_id)
         return ok(id=user_id, message='Verifier invitation sent. The account becomes active after the invitation is accepted.'), 201
     except IntegrityError:
         return err('A verifier account already uses this email address.', 409)
@@ -1165,7 +1166,7 @@ def resend_verifier_invitation(user_id):
             user['email'], user['display_name'], invitation_url, invitation_id
         )
     except EmailDeliveryError:
-        b.app.logger.exception('Verifier invitation resend failed')
+        b.app.logger.exception('Verifier invitation resend through Nylas failed')
         return err('The invitation email could not be delivered. Check the email provider configuration.', 503)
     return ok(message='A new verifier invitation has been sent.')
 

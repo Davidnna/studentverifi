@@ -5,9 +5,11 @@ import html
 import hmac
 import json
 import os
+import re
 import secrets
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 from io import BytesIO
 
 
@@ -45,22 +47,94 @@ def verify_otp(secret_key, challenge_id, otp, expected_digest):
     return hmac.compare_digest(supplied, str(expected_digest))
 
 
-def send_transactional_email(to_address, subject, text_body, html_body, idempotency_key=None):
-    """Send a transactional email through Resend's HTTPS API."""
-    api_key = (os.environ.get("RESEND_API_KEY") or "").strip()
-    sender = (os.environ.get("MAIL_FROM") or "").strip()
-    if not api_key or not sender:
-        raise EmailDeliveryError("Transactional email is not configured.")
+def _nylas_email_config():
+    """Return validated Nylas Transactional Send settings or raise safely."""
+    api_key = (os.environ.get("NYLAS_API_KEY") or "").strip()
+    domain = (os.environ.get("NYLAS_DOMAIN") or "").strip().lower().rstrip(".")
+    sender_email = (os.environ.get("NYLAS_FROM_EMAIL") or "").strip()
+    sender_name = (os.environ.get("NYLAS_FROM_NAME") or "StudentVerifi").strip() or "StudentVerifi"
+    api_base_url = (
+        os.environ.get("NYLAS_API_BASE_URL")
+        or os.environ.get("NYLAS_API_URI")
+        or "https://api.us.nylas.com"
+    ).strip().rstrip("/")
+    reply_to = (os.environ.get("NYLAS_REPLY_TO") or "").strip()
 
-    payload = json.dumps({
-        "from": sender,
-        "to": [to_address],
-        "subject": subject,
-        "text": text_body,
-        "html": html_body,
-    }).encode("utf-8")
+    if not api_key or not domain or not sender_email:
+        raise EmailDeliveryError("Nylas transactional email is not configured.")
+
+    domain_pattern = r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}"
+    if not re.fullmatch(domain_pattern, domain):
+        raise EmailDeliveryError("Nylas sending-domain configuration is invalid.")
+
+    email_pattern = r"^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$"
+    if not re.fullmatch(email_pattern, sender_email):
+        raise EmailDeliveryError("Nylas sender-email configuration is invalid.")
+    sender_domain = sender_email.rsplit("@", 1)[1].lower()
+    if sender_domain != domain:
+        raise EmailDeliveryError("The Nylas sender address must use the verified sending domain.")
+    if reply_to and not re.fullmatch(email_pattern, reply_to):
+        raise EmailDeliveryError("Nylas reply-to configuration is invalid.")
+
+    try:
+        parsed = urlsplit(api_base_url)
+        parsed_port = parsed.port
+    except ValueError as error:
+        raise EmailDeliveryError("Nylas API region configuration is invalid.") from error
+    allowed_hosts = {"api.us.nylas.com", "api.eu.nylas.com"}
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname not in allowed_hosts
+        or parsed.username
+        or parsed.password
+        or parsed_port not in (None, 443)
+        or parsed.path not in ("", "/")
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise EmailDeliveryError("Nylas API region configuration is invalid.")
+
+    return {
+        "api_key": api_key,
+        "domain": domain,
+        "sender_email": sender_email,
+        "sender_name": sender_name,
+        "api_base_url": api_base_url,
+        "reply_to": reply_to,
+    }
+
+
+def email_delivery_is_configured():
+    """Return whether all required Nylas Transactional Send settings are valid."""
+    try:
+        _nylas_email_config()
+        return True
+    except EmailDeliveryError:
+        return False
+
+
+def send_transactional_email(to_address, subject, html_body, idempotency_key=None):
+    """Send an HTML transactional email through Nylas Transactional Send."""
+    config = _nylas_email_config()
+    recipient = str(to_address or "").strip()
+    if not re.fullmatch(r"^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$", recipient):
+        raise EmailDeliveryError("The transactional email recipient is invalid.")
+
+    payload = {
+        "to": [{"email": recipient}],
+        "from": {
+            "name": config["sender_name"],
+            "email": config["sender_email"],
+        },
+        "subject": str(subject),
+        "body": str(html_body),
+        "is_plaintext": False,
+    }
+    if config["reply_to"]:
+        payload["reply_to"] = [{"email": config["reply_to"]}]
+
     headers = {
-        "Authorization": f"Bearer {api_key}",
+        "Authorization": f"Bearer {config['api_key']}",
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
@@ -68,30 +142,32 @@ def send_transactional_email(to_address, subject, text_body, html_body, idempote
         headers["Idempotency-Key"] = str(idempotency_key)[:256]
 
     request = urllib.request.Request(
-        "https://api.resend.com/emails",
-        data=payload,
+        f"{config['api_base_url']}/v3/domains/{config['domain']}/messages/send",
+        data=json.dumps(payload).encode("utf-8"),
         headers=headers,
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=8) as response:
+        with urllib.request.urlopen(request, timeout=10) as response:
             if response.status < 200 or response.status >= 300:
-                raise EmailDeliveryError("The email provider rejected the message.")
-            response.read(4096)
+                raise EmailDeliveryError("Nylas rejected the transactional email.")
+            raw_response = response.read(8192)
+            if not raw_response:
+                return {}
+            try:
+                return json.loads(raw_response.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                return {}
     except urllib.error.HTTPError as error:
-        # Do not expose provider response bodies, recipient addresses or secrets.
-        raise EmailDeliveryError(f"Email provider returned HTTP {error.code}.") from error
+        # Never expose provider response bodies, recipient addresses or API secrets.
+        raise EmailDeliveryError(f"Nylas returned HTTP {error.code}.") from error
     except (urllib.error.URLError, TimeoutError, OSError) as error:
-        raise EmailDeliveryError("The email provider could not be reached.") from error
+        raise EmailDeliveryError("Nylas could not be reached to deliver the email.") from error
 
 
 def send_claim_otp(to_address, otp, challenge_id, institution_name="StudentVerifi"):
     safe_name = html.escape(institution_name or "StudentVerifi")
     subject = f"Your {institution_name} account verification code"
-    text_body = (
-        f"Your StudentVerifi account-claim code is {otp}. "
-        f"It expires in {OTP_TTL_MINUTES} minutes. If you did not request it, ignore this email."
-    )
     html_body = (
         "<div style=\"font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#172033\">"
         f"<p style=\"font-size:13px;letter-spacing:1px;color:#52627a\">{safe_name}</p>"
@@ -105,7 +181,6 @@ def send_claim_otp(to_address, otp, challenge_id, institution_name="StudentVerif
     send_transactional_email(
         to_address,
         subject,
-        text_body,
         html_body,
         idempotency_key=f"student-claim-otp/{challenge_id}",
     )
@@ -114,10 +189,6 @@ def send_claim_otp(to_address, otp, challenge_id, institution_name="StudentVerif
 def send_verifier_invitation(to_address, display_name, invitation_url, invitation_id):
     safe_name = html.escape(display_name or "colleague")
     safe_url = html.escape(invitation_url, quote=True)
-    text_body = (
-        "You have been invited to verify student credentials through StudentVerifi. "
-        f"Accept your invitation here: {invitation_url}. The link expires in 48 hours."
-    )
     html_body = (
         "<div style=\"font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#172033\">"
         f"<h2>Hello {safe_name},</h2>"
@@ -129,7 +200,6 @@ def send_verifier_invitation(to_address, display_name, invitation_url, invitatio
     send_transactional_email(
         to_address,
         "Your StudentVerifi verifier invitation",
-        text_body,
         html_body,
         idempotency_key=f"verifier-invitation/{invitation_id}",
     )
