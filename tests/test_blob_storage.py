@@ -19,24 +19,27 @@ class FakeBlobClient:
     deleted_paths = None
     stored_bytes = b"student-photo-bytes"
 
+    def __init__(self, *, token):
+        self.__class__.client_token = token
+
     async def aclose(self):
         self.__class__.closed = True
 
-    async def put(self, pathname, body, **options):
+    async def put(self, pathname, body, *, access, content_type, add_random_suffix):
         self.__class__.uploaded_path = pathname
-        self.__class__.upload_options = options
+        self.__class__.upload_options = dict(access=access, content_type=content_type, add_random_suffix=add_random_suffix)
         self.__class__.stored_bytes = body
         return SimpleNamespace(pathname=pathname)
 
-    async def get(self, pathname, **options):
-        self.__class__.get_options = options
+    async def get(self, pathname, *, access):
+        self.__class__.get_options = dict(access=access)
 
         async def stream():
             yield self.__class__.stored_bytes
 
         return SimpleNamespace(status_code=200, stream=stream())
 
-    async def delete(self, paths, *, token):
+    async def delete(self, paths):
         self.__class__.deleted_paths = paths
 
 
@@ -67,14 +70,14 @@ class PrivateBlobTests(unittest.TestCase):
         self.assertEqual(FakeBlobClient.upload_options["access"], "private")
         self.assertEqual(FakeBlobClient.upload_options["content_type"], "image/jpeg")
         self.assertTrue(FakeBlobClient.upload_options["add_random_suffix"])
-        self.assertEqual(FakeBlobClient.upload_options["token"], "test-private-token")
+        self.assertEqual(FakeBlobClient.client_token, "test-private-token")
         self.assertTrue(FakeBlobClient.closed)
 
     def test_private_photo_retrieval_uses_private_access(self):
         result = read_private_profile_photo("student-profiles/17/photo.jpg")
         self.assertEqual(result, b"student-photo-bytes")
         self.assertEqual(FakeBlobClient.get_options["access"], "private")
-        self.assertEqual(FakeBlobClient.get_options["token"], "test-private-token")
+        self.assertEqual(FakeBlobClient.client_token, "test-private-token")
 
     def test_delete_only_accepts_student_profile_paths(self):
         delete_private_profile_photo("student-profiles/17/photo.jpg")

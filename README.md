@@ -1,4 +1,4 @@
-# StudentVerifi 3.1.2
+# StudentVerifi 3.1.3
 
 StudentVerifi is a web-based student-record and QR-assisted identity-verification application developed as an academic software prototype for Ebonyi State University (EBSU). It uses a React and React Router interface, a Flask JSON API, and PostgreSQL (including Neon PostgreSQL). It is not an official EBSU service unless the university formally authorises and adopts it.
 
@@ -98,11 +98,11 @@ The server sends HTML messages to `POST /v3/domains/{domain_name}/messages/send`
 4. Connect the store to the StudentVerifi project and select the environments that need access.
 5. Vercel supplies `BLOB_READ_WRITE_TOKEN` to the connected project. Confirm that it is present for Production and Preview as required. Do not expose it to the browser or commit it.
 
-The application reads and writes photographs through authenticated server-side Blob SDK operations. Release 3.1.2 explicitly passes the store token to SDK operations and does not depend on the client supporting async context management. Upload failures are logged using safe diagnostic codes rather than provider response bodies. In Vercel Logs, filter for `Student claim photo upload failed` or `Photo storage operation=upload`:
+The application reads and writes photographs through authenticated server-side Blob SDK operations. Release 3.1.3 pins the official `vercel==0.5.7` Python SDK, which documents `AsyncBlobClient` and constructor-based token authentication. Both dependency manifests use the same pin. The client is explicitly authenticated and closed; uploads and retrieval require private access. The existing GitHub Actions test suite now checks the real installed SDK import and call signatures without contacting the store. These tests do not verify a live upload. Upload failures are logged using safe diagnostic codes rather than provider response bodies. In Vercel Logs, filter for `Student claim photo upload failed` or `Photo storage operation=upload`:
 
 - `missing_blob_token`: check that the read/write token is present in the exact deployment environment, and redeploy after changing it.
 - `blob_access_denied`: check the token belongs to the connected Private store and has write access.
-- `blob_sdk_incompatible`: inspect the installed SDK version and its method signatures.
+- `blob_sdk_incompatible`: check the installed SDK version in the diagnostic log; verify `vercel==0.5.7` was installed in the deployed function, and that the real-SDK test passed in GitHub Actions. If necessary redeploy the corrected generated-assets commit without reusing the build cache.
 - `blob_timeout`, `blob_store_unavailable`, `blob_provider_error` or `blob_invalid_response`: check store availability and the provider request's status. Do not share secrets or raw provider exception messages.
 
 The student-facing error remains generic. If a claim expires while troubleshooting, restart the claim and request a new code. No account or QR is created until the photograph has been stored and account activation completes.

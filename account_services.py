@@ -6,6 +6,7 @@ import hmac
 import json
 import logging
 import inspect
+from importlib.metadata import PackageNotFoundError, version
 import os
 import re
 import secrets
@@ -57,7 +58,14 @@ def _blob_error(operation, error):
         reason = "blob_store_unavailable"
     else:
         reason = "blob_provider_error"
-    logging.getLogger(__name__).warning("Photo storage operation=%s reason=%s exception=%s", operation, reason, error_type)
+    try:
+        sdk_version = version("vercel")
+    except PackageNotFoundError:
+        sdk_version = "not-installed"
+    logging.getLogger(__name__).warning(
+        "Photo storage operation=%s reason=%s exception=%s sdk_version=%s",
+        operation, reason, error_type, sdk_version,
+    )
     return PhotoStorageError("Private photo storage is temporarily unavailable.", reason)
 
 
@@ -322,12 +330,12 @@ def upload_private_profile_photo(student_id, image_bytes):
         from vercel.blob import AsyncBlobClient
 
         async def upload():
-            client = AsyncBlobClient()
+            client = AsyncBlobClient(token=token)
             try:
                 return await asyncio.wait_for(client.put(
                     f"student-profiles/{int(student_id)}/{secrets.token_hex(16)}.jpg",
                     image_bytes, access="private", content_type="image/jpeg",
-                    add_random_suffix=True, token=token,
+                    add_random_suffix=True,
                 ), timeout=20)
             finally:
                 await _close_blob_client(client)
@@ -351,9 +359,9 @@ def read_private_profile_photo(pathname):
         from vercel.blob import AsyncBlobClient
 
         async def retrieve():
-            client = AsyncBlobClient()
+            client = AsyncBlobClient(token=token)
             try:
-                result = await asyncio.wait_for(client.get(str(pathname), access="private", token=token), timeout=15)
+                result = await asyncio.wait_for(client.get(str(pathname), access="private"), timeout=15)
                 if result is None or getattr(result, "status_code", 0) != 200 or result.stream is None:
                     return None
 
@@ -384,9 +392,9 @@ def delete_private_profile_photo(pathname):
         from vercel.blob import AsyncBlobClient
 
         async def remove():
-            client = AsyncBlobClient()
+            client = AsyncBlobClient(token=token)
             try:
-                await asyncio.wait_for(client.delete([str(pathname)], token=token), timeout=8)
+                await asyncio.wait_for(client.delete([str(pathname)]), timeout=8)
             finally:
                 await _close_blob_client(client)
 
