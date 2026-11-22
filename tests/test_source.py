@@ -279,5 +279,21 @@ class SourceContractTests(unittest.TestCase):
         self.assertNotIn("return ok(token=", api)
 
 
+    def test_private_student_photos_use_authenticated_fetch_and_object_urls(self):
+        api_client = self.text('frontend/src/api.js')
+        pages = self.text('frontend/src/pages.js')
+        api = self.text('spa_api.py')
+        self.assertIn('export async function fetchPrivateImage', api_client)
+        self.assertIn("credentials: 'same-origin'", api_client)
+        self.assertIn("cache: 'no-store'", api_client)
+        self.assertIn("URL.createObjectURL(blob)", pages)
+        self.assertIn('function PrivatePhoto(', pages)
+        self.assertIn("h(PrivatePhoto, {", pages)
+        self.assertIn("Content-Disposition'] = 'inline;", api)
+        self.assertIn("X-Content-Type-Options'] = 'nosniff'", api)
+        self.assertNotIn("el('img', { src: student.photo_url", pages)
+        self.assertIn('test_student_private_photo_route_returns_inline_jpeg_for_authenticated_student', self.text('tests/test_runtime.py'))
+
+
 if __name__ == "__main__":
     unittest.main()

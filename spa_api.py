@@ -244,7 +244,17 @@ def send_private_photo_response(pathname):
     image_bytes = read_private_profile_photo(pathname)
     if not image_bytes:
         raise PhotoStorageError('Private profile photograph could not be retrieved.')
-    response = make_response(send_file(io.BytesIO(image_bytes), mimetype='image/jpeg'))
+    response = make_response(send_file(
+        io.BytesIO(image_bytes),
+        mimetype='image/jpeg',
+        as_attachment=False,
+        download_name='student-profile.jpg',
+        conditional=False
+    ))
+    response.headers['Content-Disposition'] = 'inline; filename="student-profile.jpg"'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['Cross-Origin-Resource-Policy'] = 'same-origin'
+    response.headers['Vary'] = 'Cookie'
     response.headers['Cache-Control'] = 'private, no-store, max-age=0'
     return response
 

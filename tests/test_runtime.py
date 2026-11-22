@@ -183,5 +183,47 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
 
 
+    def test_student_private_photo_route_returns_inline_jpeg_for_authenticated_student(self):
+        import spa_api
+
+        class PhotoDatabase:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def execute(self, statement, params=()):
+                query = statement.strip()
+                if 'FROM users WHERE id' in query:
+                    return Result([{'id': 17, 'username': 'student', 'role': 'student',
+                                    'student_id': 8, 'is_active': True}])
+                if 'SELECT status FROM students WHERE id' in query:
+                    return Result([{'status': 'Active'}])
+                if 'SELECT photo_blob_path, photo_url FROM students WHERE id' in query:
+                    return Result([{'photo_blob_path': 'student-profiles/8/photo.jpg', 'photo_url': None}])
+                raise AssertionError('Unexpected photo query: ' + query)
+
+        with self.client.session_transaction() as session:
+            session.update(user_id=17, username='student', role='student', student_id=8)
+
+        jpeg = b'\xff\xd8\xff\xd9'
+        with patch.object(app, 'get_db', side_effect=PhotoDatabase), \
+             patch.object(app, 'ensure_security_migrations'), \
+             patch.object(spa_api, 'read_private_profile_photo', return_value=jpeg):
+            response = self.client.get('/api/student/my-photo')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, 'image/jpeg')
+        self.assertEqual(response.data, jpeg)
+        self.assertTrue(response.headers['Content-Disposition'].startswith('inline;'))
+        self.assertEqual(response.headers['X-Content-Type-Options'], 'nosniff')
+        self.assertEqual(response.headers['Cache-Control'], 'private, no-store, max-age=0')
+
+    def test_student_private_photo_route_rejects_anonymous_requests(self):
+        response = self.client.get('/api/student/my-photo')
+        self.assertEqual(response.status_code, 401)
+
+
 if __name__ == "__main__":
     unittest.main()

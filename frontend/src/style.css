@@ -1684,3 +1684,41 @@ textarea:focus-visible, summary:focus-visible {
 .claim-stage .auth-panel-heading h1 { font-size: clamp(1.65rem, 4vw, 2rem); line-height: 1.2; margin: 0 0 .6rem; }
 @media (prefers-reduced-motion: no-preference) { .claim-stage { animation: claim-reveal .18s ease-out both; } }
 @keyframes claim-reveal { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+
+.profile-placeholder {
+    position: relative;
+}
+.photo-loading {
+    color: var(--muted);
+    background: linear-gradient(110deg, #e8eef6 8%, #f5f8fc 18%, #e8eef6 33%);
+    background-size: 200% 100%;
+    animation: photo-shimmer 1.25s linear infinite;
+}
+.photo-retry {
+    position: absolute;
+    right: -.35rem;
+    bottom: -.35rem;
+    display: grid;
+    width: 1.65rem;
+    height: 1.65rem;
+    place-items: center;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    background: var(--brand-strong);
+    color: #fff;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgb(15 35 60 / 18%);
+}
+.photo-retry:focus-visible {
+    outline: 3px solid var(--focus, #2563eb);
+    outline-offset: 2px;
+}
+@keyframes photo-shimmer {
+    to { background-position-x: -200%; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .photo-loading { animation: none; }
+}

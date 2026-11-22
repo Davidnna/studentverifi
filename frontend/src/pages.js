@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { api, compactDate } from './api.js';
+import { api, compactDate, fetchPrivateImage } from './api.js';
 import {
     h,
     useAuth,
@@ -42,6 +42,91 @@ function useResource(path) {
     }, [path, nonce]);
 
     return { value, loading, error, reload: () => setNonce((current) => current + 1) };
+}
+
+function PrivatePhoto({
+    src,
+    alt,
+    className = 'profile-image',
+    placeholderClassName = 'profile-placeholder',
+    fallbackText = '?'
+}) {
+    const [imageUrl, setImageUrl] = useState('');
+    const [status, setStatus] = useState(src ? 'loading' : 'missing');
+    const [retry, setRetry] = useState(0);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        let active = true;
+        let objectUrl = '';
+
+        setImageUrl('');
+        if (!src) {
+            setStatus('missing');
+            return () => controller.abort();
+        }
+
+        setStatus('loading');
+        fetchPrivateImage(src, { signal: controller.signal })
+            .then((blob) => {
+                if (!active) {
+                    return;
+                }
+                objectUrl = URL.createObjectURL(blob);
+                setImageUrl(objectUrl);
+                setStatus('ready');
+            })
+            .catch((error) => {
+                if (!active || error.name === 'AbortError') {
+                    return;
+                }
+                console.warn('StudentVerifi private photo request failed.', {
+                    status: Number.isInteger(error.status) ? error.status : 0
+                });
+                setStatus('error');
+            });
+
+        return () => {
+            active = false;
+            controller.abort();
+            if (objectUrl) {
+                URL.revokeObjectURL(objectUrl);
+            }
+        };
+    }, [src, retry]);
+
+    if (status === 'ready' && imageUrl) {
+        return el('img', {
+            src: imageUrl,
+            alt,
+            className,
+            onError: () => {
+                URL.revokeObjectURL(imageUrl);
+                setImageUrl('');
+                setStatus('error');
+            }
+        });
+    }
+
+    const fallback = fallbackText || h(Icon, { name: 'user', size: 28 });
+    if (status === 'error') {
+        return el('div', { className: placeholderClassName },
+            el('span', { 'aria-hidden': 'true' }, fallback),
+            el('button', {
+                type: 'button',
+                className: 'photo-retry',
+                onClick: () => setRetry((current) => current + 1),
+                'aria-label': 'Retry loading profile photograph',
+                title: 'Retry loading photograph'
+            }, '↻')
+        );
+    }
+
+    return el('div', {
+        className: placeholderClassName + (status === 'loading' ? ' photo-loading' : ''),
+        role: 'img',
+        'aria-label': status === 'loading' ? `Loading ${alt.toLowerCase()}` : `${alt} not provided`
+    }, fallback);
 }
 
 function getInput(setter, field) {
@@ -962,16 +1047,13 @@ export function StudentDetail() {
             : student && el('div', { className: 'two-col' },
                 h(Panel, null,
                     el('div', { className: 'student-heading' },
-                        student.photo_url
-                            ? el('img', {
-                                src: student.photo_url,
-                                alt: 'Student profile photograph',
-                                className: 'profile-image',
-                                referrerPolicy: 'no-referrer'
-                            })
-                            : el('div', { className: 'profile-placeholder', 'aria-hidden': 'true' },
-                                (student.name || '?').slice(0, 1)
-                            ),
+                        h(PrivatePhoto, {
+                            src: student.photo_url,
+                            alt: 'Student profile photograph',
+                            className: 'profile-image',
+                            placeholderClassName: 'profile-placeholder',
+                            fallbackText: (student.name || '?').slice(0, 1)
+                        }),
                         el('div', null,
                             el('h2', null, student.name),
                             h(Pill, { status: student.status }),
@@ -1354,11 +1436,12 @@ export function Verify() {
                     ),
                     el('p', null, result.message),
                     result.student && el('div', { className: 'result-student' },
-                        result.student.photo_url && el('img', {
+                        h(PrivatePhoto, {
                             src: result.student.photo_url,
                             alt: 'Student record photograph',
                             className: 'profile-image',
-                            referrerPolicy: 'no-referrer'
+                            placeholderClassName: 'profile-placeholder',
+                            fallbackText: (result.student.name || '?').slice(0, 1)
                         }),
                         el('div', null,
                             el('strong', null, result.student.name),
@@ -1700,9 +1783,13 @@ export function StudentAccount() {
             : student && el('div', { className: 'two-col' },
                 h(Panel, null,
                     el('div', { className: 'student-heading' },
-                        student.photo_url
-                            ? el('img', { src: student.photo_url, alt: 'Your profile photograph', className: 'profile-image' })
-                            : el('div', { className: 'profile-placeholder', 'aria-hidden': 'true' }, (student.name || '?').slice(0, 1)),
+                        h(PrivatePhoto, {
+                            src: student.photo_url,
+                            alt: 'Your profile photograph',
+                            className: 'profile-image',
+                            placeholderClassName: 'profile-placeholder',
+                            fallbackText: (student.name || '?').slice(0, 1)
+                        }),
                         el('div', null,
                             el('h2', null, student.name),
                             h(Pill, { status: student.status }),

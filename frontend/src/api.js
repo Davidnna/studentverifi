@@ -143,6 +143,47 @@ export async function api(path, { method = 'GET', body, signal } = {}) {
     return data;
 }
 
+export async function fetchPrivateImage(path, { signal } = {}) {
+    if (typeof path !== 'string' || !path.startsWith('/api/') || path.startsWith('//')) {
+        throw new ApiError('The profile photograph address is invalid.', 0);
+    }
+
+    let response;
+    try {
+        response = await fetch(path, {
+            method: 'GET',
+            headers: { Accept: 'image/jpeg, image/png, image/webp' },
+            credentials: 'same-origin',
+            cache: 'no-store',
+            signal
+        });
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw error;
+        }
+        throw new ApiError('The profile photograph could not be reached. Check your connection and retry.', 0);
+    }
+
+    if (!response.ok) {
+        const data = await readJson(response);
+        throw new ApiError(
+            data.error || `The profile photograph could not be loaded (${response.status}).`,
+            response.status
+        );
+    }
+
+    const contentType = (response.headers.get('Content-Type') || '').split(';', 1)[0].trim().toLowerCase();
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(contentType)) {
+        throw new ApiError('The photo service did not return a supported image.', response.status);
+    }
+
+    const image = await response.blob();
+    if (!image.size) {
+        throw new ApiError('The stored profile photograph is empty.', response.status);
+    }
+    return image;
+}
+
 export const compactDate = (value) => {
     if (!value) {
         return '—';

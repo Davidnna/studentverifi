@@ -1,4 +1,4 @@
-# StudentVerifi 3.1.3
+# StudentVerifi 3.1.4
 
 StudentVerifi is a web-based student-record and QR-assisted identity-verification application developed as an academic software prototype for Ebonyi State University (EBSU). It uses a React and React Router interface, a Flask JSON API, and PostgreSQL (including Neon PostgreSQL). It is not an official EBSU service unless the university formally authorises and adopts it.
 
@@ -98,7 +98,7 @@ The server sends HTML messages to `POST /v3/domains/{domain_name}/messages/send`
 4. Connect the store to the StudentVerifi project and select the environments that need access.
 5. Vercel supplies `BLOB_READ_WRITE_TOKEN` to the connected project. Confirm that it is present for Production and Preview as required. Do not expose it to the browser or commit it.
 
-The application reads and writes photographs through authenticated server-side Blob SDK operations. Release 3.1.3 pins the official `vercel==0.5.7` Python SDK, which documents `AsyncBlobClient` and constructor-based token authentication. Both dependency manifests use the same pin. The client is explicitly authenticated and closed; uploads and retrieval require private access. The existing GitHub Actions test suite now checks the real installed SDK import and call signatures without contacting the store. These tests do not verify a live upload. Upload failures are logged using safe diagnostic codes rather than provider response bodies. In Vercel Logs, filter for `Student claim photo upload failed` or `Photo storage operation=upload`:
+The application reads and writes photographs through authenticated server-side Blob SDK operations. Release 3.1.4 pins the official `vercel==0.5.7` Python SDK, which documents `AsyncBlobClient` and constructor-based token authentication. Both dependency manifests use the same pin. The client is explicitly authenticated and closed; uploads and retrieval require private access. The existing GitHub Actions test suite now checks the real installed SDK import and call signatures without contacting the store. These tests do not verify a live upload. Upload failures are logged using safe diagnostic codes rather than provider response bodies. In Vercel Logs, filter for `Student claim photo upload failed` or `Photo storage operation=upload`:
 
 - `missing_blob_token`: check that the read/write token is present in the exact deployment environment, and redeploy after changing it.
 - `blob_access_denied`: check the token belongs to the connected Private store and has write access.
@@ -209,3 +209,10 @@ Local execution is optional; the intended deployment workflow is online. If a de
 ## Responsible use and limitations
 
 StudentVerifi is an academic prototype. Before using genuine student records, obtain institutional authorisation, approve a privacy notice and retention schedule, restrict staff permissions, establish backup and recovery procedures, and carry out security and accessibility testing. The institution must confirm the correct student-record source, matriculation-number rules, staff verification procedures and permitted public information. A QR scan alone does not establish the physical identity of its holder.
+
+
+## Release 3.1.4 — authenticated profile-photo delivery
+
+Private profile photographs are now loaded by the React client through an authenticated same-origin fetch. The browser receives the image as a binary response and creates a temporary object URL for display. This avoids relying on a direct HTML image request to carry the authenticated application session. Object URLs are revoked when the component unmounts or the image changes. Failed requests display an accessible placeholder and a retry control rather than a broken-image alt-text icon. The Flask photo endpoint returns an explicit inline JPEG response with `nosniff`, private no-store caching, and a cookie variance header.
+
+The student dashboard, administrator student-detail page, and authenticated verifier result view use the same private-photo component. Public QR verification continues to use its existing limited public verification response.
