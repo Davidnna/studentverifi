@@ -4,6 +4,8 @@ import hashlib
 import html
 import hmac
 import json
+import logging
+import inspect
 import os
 import re
 import secrets
@@ -29,6 +31,47 @@ class EmailDeliveryError(RuntimeError):
 
 class PhotoStorageError(RuntimeError):
     """Raised when private profile-photo storage is unavailable."""
+
+    def __init__(self, message, reason="storage_unavailable"):
+        super().__init__(message)
+        self.reason = reason
+
+
+def _blob_token():
+    token = (os.environ.get("BLOB_READ_WRITE_TOKEN") or "").strip()
+    if not token:
+        raise PhotoStorageError("Private photo storage is unavailable.", "missing_blob_token")
+    return token
+
+
+def _blob_error(operation, error):
+    # No provider error message, URL, path, token or image data in logs.
+    error_type = type(error).__name__
+    if isinstance(error, TimeoutError):
+        reason = "blob_timeout"
+    elif isinstance(error, (ImportError, AttributeError, TypeError)):
+        reason = "blob_sdk_incompatible"
+    elif "Access" in error_type or "Forbidden" in error_type or "Unauthorized" in error_type:
+        reason = "blob_access_denied"
+    elif "NotFound" in error_type or "Suspended" in error_type:
+        reason = "blob_store_unavailable"
+    else:
+        reason = "blob_provider_error"
+    logging.getLogger(__name__).warning("Photo storage operation=%s reason=%s exception=%s", operation, reason, error_type)
+    return PhotoStorageError("Private photo storage is temporarily unavailable.", reason)
+
+
+async def _close_blob_client(client):
+    # The SDK examples use direct method calls, not a context manager.
+    close = getattr(client, "aclose", None) or getattr(client, "close", None)
+    if callable(close):
+        try:
+            result = close()
+            if inspect.isawaitable(result):
+                await asyncio.wait_for(result, timeout=2)
+        except Exception:
+            logging.getLogger(__name__).warning("Photo storage client cleanup failed")
+
 
 
 def create_otp():
@@ -165,44 +208,75 @@ def send_transactional_email(to_address, subject, html_body, idempotency_key=Non
         raise EmailDeliveryError("Nylas could not be reached to deliver the email.") from error
 
 
+def _email_brand_origin():
+    base = (os.environ.get("APP_BASE_URL") or "").strip().rstrip("/")
+    try:
+        parsed = urlsplit(base)
+        if (parsed.scheme == "https" and parsed.hostname and not parsed.username and
+                not parsed.password and parsed.path in ("", "/") and not parsed.query and
+                not parsed.fragment and parsed.port in (None, 443)):
+            return base
+    except ValueError:
+        pass
+    return ""
+
+
+def render_branded_email(title, introduction, content, security_note, preheader):
+    """Shared email presentation; content is constructed by trusted templates."""
+    origin = _email_brand_origin()
+    home = html.escape(origin, quote=True)
+    logo = (f'<img src="{home}/email-logo.png" width="260" height="60" alt="StudentVerifi" '
+            'style="display:block;width:260px;max-width:100%;height:auto;border:0;margin:0 auto;">'
+            if origin else '<strong style="font-size:24px;color:#17243a">StudentVerifi</strong>')
+    institution = html.escape(os.environ.get("INSTITUTION_NAME") or "Ebonyi State University")
+    footer_link = (f'<a href="{home}" style="color:#155b87;text-decoration:underline">Visit StudentVerifi</a>'
+                   if origin else 'StudentVerifi')
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#eef3f8;color:#17243a;font-family:Arial,Helvetica,sans-serif;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">{html.escape(preheader)}</div>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef3f8;"><tr><td align="center" style="padding:28px 12px;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border:1px solid #dce5ef;border-radius:16px;overflow:hidden;">
+<tr><td style="background:#155b87;height:6px;font-size:0;line-height:0;">&nbsp;</td></tr>
+<tr><td align="center" style="padding:28px 24px 22px;border-bottom:1px solid #e6edf4;">{logo}<p style="margin:10px 0 0;color:#52627a;font-size:12px;">{institution} &middot; Academic prototype</p></td></tr>
+<tr><td style="padding:30px 28px;">
+<p style="margin:0 0 9px;color:#0f766e;font-size:11px;letter-spacing:1.8px;font-weight:bold;">STUDENTVERIFI &nbsp; / &nbsp; ACCOUNT SECURITY</p>
+<h1 style="margin:0 0 16px;font-size:25px;line-height:1.3;color:#17243a;">{html.escape(title)}</h1>
+<p style="margin:0 0 20px;font-size:15px;line-height:1.65;color:#45556b;">{html.escape(introduction)}</p>
+{content}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;background:#f4f8fb;border-radius:8px;border:1px solid #e1e9f0;"><tr><td style="padding:15px;font-size:13px;line-height:1.6;color:#45556b;"><strong style="color:#17243a;">Keep your account secure</strong><br>{html.escape(security_note)}</td></tr></table>
+</td></tr><tr><td align="center" style="padding:20px 24px;background:#f6f8fb;border-top:1px solid #e6edf4;color:#52627a;font-size:12px;line-height:1.7;">{footer_link}<br>This is an automated account email. Never share your verification code or invitation link.</td></tr>
+</table></td></tr></table></body></html>"""
+
+
 def send_claim_otp(to_address, otp, challenge_id, institution_name="StudentVerifi"):
-    safe_name = html.escape(institution_name or "StudentVerifi")
-    subject = f"Your {institution_name} account verification code"
-    html_body = (
-        "<div style=\"font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#172033\">"
-        f"<p style=\"font-size:13px;letter-spacing:1px;color:#52627a\">{safe_name}</p>"
-        "<h2>Verify your student account</h2>"
-        "<p>Use the one-time code below to continue claiming your student account.</p>"
-        f"<p style=\"font-size:30px;font-weight:700;letter-spacing:8px;padding:16px;background:#f3f6fb;border-radius:12px;text-align:center\">{otp}</p>"
-        f"<p>This code expires in {OTP_TTL_MINUTES} minutes and can only be used once.</p>"
-        "<p>If you did not request this code, you can ignore this message.</p>"
-        "</div>"
+    code = html.escape(str(otp))
+    content = (
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#edf5fc;border:1px solid #d6e6f5;border-radius:10px;"><tr><td align="center" style="padding:20px 8px;">'
+        '<p style="margin:0 0 7px;color:#52627a;font-size:12px;font-weight:bold;letter-spacing:1px;">YOUR VERIFICATION CODE</p>'
+        f'<p style="margin:0;color:#1d4ed8;font-family:Arial,sans-serif;font-size:34px;font-weight:bold;letter-spacing:6px;">{code}</p>'
+        f'<p style="margin:11px 0 0;color:#45556b;font-size:13px;">Expires in {OTP_TTL_MINUTES} minutes &middot; Single use</p></td></tr></table>'
     )
-    send_transactional_email(
-        to_address,
-        subject,
-        html_body,
-        idempotency_key=f"student-claim-otp/{challenge_id}",
-    )
+    body = render_branded_email("Verify your email", "Enter the code below in StudentVerifi to confirm your email address.", content,
+        "Do not share this code with anyone. If you did not request it, simply ignore this email.",
+        "Your StudentVerifi verification code is ready.")
+    send_transactional_email(to_address, "StudentVerifi | Your verification code", body,
+                             idempotency_key=f"student-claim-otp/{challenge_id}")
 
 
 def send_verifier_invitation(to_address, display_name, invitation_url, invitation_id):
-    safe_name = html.escape(display_name or "colleague")
     safe_url = html.escape(invitation_url, quote=True)
-    html_body = (
-        "<div style=\"font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#172033\">"
-        f"<h2>Hello {safe_name},</h2>"
-        "<p>You have been invited to use StudentVerifi as an authorised verifier.</p>"
-        f"<p><a href=\"{safe_url}\">Accept invitation and create your password</a></p>"
-        "<p>This invitation expires in 48 hours. If you were not expecting it, ignore this email.</p>"
-        "</div>"
+    content = (
+        '<table role="presentation" cellspacing="0" cellpadding="0" style="margin:22px auto;"><tr><td align="center" bgcolor="#155b87" style="border-radius:8px;">'
+        f'<a href="{safe_url}" style="display:inline-block;color:#ffffff;font-size:15px;font-weight:bold;padding:14px 24px;text-decoration:none;">Accept invitation</a></td></tr></table>'
+        '<p style="color:#45556b;font-size:13px;line-height:1.6;">This invitation expires in 48 hours. If the button does not work, copy this address into your browser:</p>'
+        f'<p style="font-size:12px;word-break:break-all;overflow-wrap:anywhere;"><a href="{safe_url}" style="color:#155b87;">{safe_url}</a></p>'
     )
-    send_transactional_email(
-        to_address,
-        "Your StudentVerifi verifier invitation",
-        html_body,
-        idempotency_key=f"verifier-invitation/{invitation_id}",
-    )
+    body = render_branded_email("You are invited", f"Hello {display_name or 'colleague'}, you have been invited to join StudentVerifi as an authorised verifier.", content,
+        "Only accept an invitation you were expecting. This link is personal and must not be forwarded.",
+        "Your invitation to join StudentVerifi.")
+    send_transactional_email(to_address, "StudentVerifi | Verifier invitation", body,
+                             idempotency_key=f"verifier-invitation/{invitation_id}")
 
 
 def process_profile_photo(file_storage):
@@ -244,66 +318,79 @@ def process_profile_photo(file_storage):
 def upload_private_profile_photo(student_id, image_bytes):
     """Upload a processed student image to a private Vercel Blob store."""
     try:
+        token = _blob_token()
         from vercel.blob import AsyncBlobClient
 
         async def upload():
-            async with AsyncBlobClient() as client:
-                return await asyncio.wait_for(
-                    client.put(
-                        f"student-profiles/{int(student_id)}/{secrets.token_hex(16)}.jpg",
-                        image_bytes,
-                        access="private",
-                        content_type="image/jpeg",
-                        add_random_suffix=True,
-                        cache_control_max_age=60,
-                    ),
-                    timeout=8,
-                )
+            client = AsyncBlobClient()
+            try:
+                return await asyncio.wait_for(client.put(
+                    f"student-profiles/{int(student_id)}/{secrets.token_hex(16)}.jpg",
+                    image_bytes, access="private", content_type="image/jpeg",
+                    add_random_suffix=True, token=token,
+                ), timeout=20)
+            finally:
+                await _close_blob_client(client)
 
         uploaded = asyncio.run(upload())
-        pathname = getattr(uploaded, "pathname", None) or getattr(getattr(uploaded, "blob", None), "pathname", None)
-        if not pathname:
-            raise PhotoStorageError("The image service did not return a storage path.")
+        pathname = getattr(uploaded, "pathname", None)
+        if not pathname or not pathname.startswith(f"student-profiles/{int(student_id)}/"):
+            raise PhotoStorageError("The image service did not return a storage path.", "blob_invalid_response")
         return pathname
     except PhotoStorageError:
         raise
     except Exception as error:
-        raise PhotoStorageError("The profile photograph could not be stored securely.") from error
+        raise _blob_error("upload", error) from None
 
 
 def read_private_profile_photo(pathname):
     if not pathname or not str(pathname).startswith("student-profiles/"):
         raise PhotoStorageError("The requested profile photograph is unavailable.")
     try:
+        token = _blob_token()
         from vercel.blob import AsyncBlobClient
 
         async def retrieve():
-            async with AsyncBlobClient() as client:
-                result = await asyncio.wait_for(client.get(str(pathname), access="private"), timeout=8)
+            client = AsyncBlobClient()
+            try:
+                result = await asyncio.wait_for(client.get(str(pathname), access="private", token=token), timeout=15)
                 if result is None or getattr(result, "status_code", 0) != 200 or result.stream is None:
                     return None
 
                 async def collect():
-                    return b"".join([chunk async for chunk in result.stream])
+                    data = bytearray()
+                    async for chunk in result.stream:
+                        data.extend(chunk)
+                        if len(data) > MAX_PROFILE_PHOTO_BYTES:
+                            raise PhotoStorageError("Stored photograph is too large.", "blob_invalid_response")
+                    return bytes(data)
 
-                return await asyncio.wait_for(collect(), timeout=8)
+                return await asyncio.wait_for(collect(), timeout=15)
+            finally:
+                await _close_blob_client(client)
 
         return asyncio.run(retrieve())
+    except PhotoStorageError:
+        raise
     except Exception as error:
-        raise PhotoStorageError("The profile photograph could not be retrieved securely.") from error
+        raise _blob_error("read", error) from None
 
 
 def delete_private_profile_photo(pathname):
     if not pathname or not str(pathname).startswith("student-profiles/"):
         return
     try:
+        token = _blob_token()
         from vercel.blob import AsyncBlobClient
 
         async def remove():
-            async with AsyncBlobClient() as client:
-                await asyncio.wait_for(client.delete([str(pathname)]), timeout=5)
+            client = AsyncBlobClient()
+            try:
+                await asyncio.wait_for(client.delete([str(pathname)], token=token), timeout=8)
+            finally:
+                await _close_blob_client(client)
 
         asyncio.run(remove())
-    except Exception:
+    except Exception as error:
         # A failed cleanup leaves an orphaned private blob, not an exposed file.
-        return
+        logging.getLogger(__name__).warning("Photo cleanup failed: %s", type(error).__name__)

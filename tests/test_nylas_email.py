@@ -9,6 +9,8 @@ from account_services import (
     EmailDeliveryError,
     email_delivery_is_configured,
     send_transactional_email,
+    send_claim_otp,
+    send_verifier_invitation,
 )
 
 
@@ -67,6 +69,27 @@ class NylasEmailTests(unittest.TestCase):
         self.assertFalse(payload["is_plaintext"])
         self.assertEqual(payload["reply_to"], [{"email": "support@example.org"}])
         self.assertEqual(result["data"]["message_id"], "test-message")
+
+    def test_otp_email_has_brand_logo_and_security_message(self):
+        with patch.dict(os.environ, dict(BASE_ENV, APP_BASE_URL="https://studentverifi.example"), clear=True):
+            with patch("account_services.send_transactional_email") as send:
+                send_claim_otp("student@example.org", "123456", 42)
+        body = send.call_args.args[2]
+        self.assertIn('https://studentverifi.example/email-logo.png', body)
+        self.assertIn('123456', body)
+        self.assertIn('Expires in 10 minutes', body)
+        self.assertEqual(send.call_args.kwargs['idempotency_key'], 'student-claim-otp/42')
+
+    def test_invitation_email_has_brand_logo_and_escaped_name(self):
+        with patch.dict(os.environ, dict(BASE_ENV, APP_BASE_URL="https://studentverifi.example"), clear=True):
+            with patch("account_services.send_transactional_email") as send:
+                send_verifier_invitation("staff@example.org", "<script>", "https://studentverifi.example/verifier/accept#token", 42)
+        body = send.call_args.args[2]
+        self.assertIn('https://studentverifi.example/email-logo.png', body)
+        self.assertIn('&lt;script&gt;', body)
+        self.assertNotIn('<script>', body)
+        self.assertIn('48 hours', body)
+        self.assertIn('https://studentverifi.example/verifier/accept#token', body)
 
     def test_european_region_is_supported(self):
         env = dict(BASE_ENV, NYLAS_API_BASE_URL="https://api.eu.nylas.com")

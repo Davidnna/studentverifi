@@ -1,4 +1,5 @@
 """Private Vercel Blob integration tests using an isolated SDK stub."""
+import os
 import sys
 import types
 import unittest
@@ -18,11 +19,8 @@ class FakeBlobClient:
     deleted_paths = None
     stored_bytes = b"student-photo-bytes"
 
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, traceback):
-        return False
+    async def aclose(self):
+        self.__class__.closed = True
 
     async def put(self, pathname, body, **options):
         self.__class__.uploaded_path = pathname
@@ -38,12 +36,16 @@ class FakeBlobClient:
 
         return SimpleNamespace(status_code=200, stream=stream())
 
-    async def delete(self, paths):
+    async def delete(self, paths, *, token):
         self.__class__.deleted_paths = paths
 
 
 class PrivateBlobTests(unittest.TestCase):
     def setUp(self):
+        self.env = patch.dict(os.environ, {"BLOB_READ_WRITE_TOKEN": "test-private-token"})
+        self.env.start()
+        self.addCleanup(self.env.stop)
+        FakeBlobClient.closed = False
         FakeBlobClient.uploaded_path = None
         FakeBlobClient.deleted_paths = None
         FakeBlobClient.stored_bytes = b"student-photo-bytes"
@@ -65,17 +67,35 @@ class PrivateBlobTests(unittest.TestCase):
         self.assertEqual(FakeBlobClient.upload_options["access"], "private")
         self.assertEqual(FakeBlobClient.upload_options["content_type"], "image/jpeg")
         self.assertTrue(FakeBlobClient.upload_options["add_random_suffix"])
+        self.assertEqual(FakeBlobClient.upload_options["token"], "test-private-token")
+        self.assertTrue(FakeBlobClient.closed)
 
     def test_private_photo_retrieval_uses_private_access(self):
         result = read_private_profile_photo("student-profiles/17/photo.jpg")
         self.assertEqual(result, b"student-photo-bytes")
         self.assertEqual(FakeBlobClient.get_options["access"], "private")
+        self.assertEqual(FakeBlobClient.get_options["token"], "test-private-token")
 
     def test_delete_only_accepts_student_profile_paths(self):
         delete_private_profile_photo("student-profiles/17/photo.jpg")
         self.assertEqual(FakeBlobClient.deleted_paths, ["student-profiles/17/photo.jpg"])
         delete_private_profile_photo("other-folder/photo.jpg")
         self.assertEqual(FakeBlobClient.deleted_paths, ["student-profiles/17/photo.jpg"])
+
+    def test_missing_token_has_safe_diagnostic(self):
+        with patch.dict(os.environ, {"BLOB_READ_WRITE_TOKEN": ""}):
+            with self.assertRaises(PhotoStorageError) as caught:
+                upload_private_profile_photo(17, b"photo")
+        self.assertEqual(caught.exception.reason, "missing_blob_token")
+        self.assertIsNone(FakeBlobClient.uploaded_path)
+
+    def test_provider_error_does_not_log_secret_or_exception_message(self):
+        with patch.object(FakeBlobClient, "put", side_effect=TypeError("SECRET example")):
+            with self.assertLogs("account_services", level="WARNING") as logs:
+                with self.assertRaises(PhotoStorageError) as caught:
+                    upload_private_profile_photo(17, b"photo")
+        self.assertEqual(caught.exception.reason, "blob_sdk_incompatible")
+        self.assertNotIn("SECRET", str(caught.exception) + str(logs.output))
 
     def test_photo_read_rejects_paths_outside_student_folder(self):
         with self.assertRaises(PhotoStorageError):

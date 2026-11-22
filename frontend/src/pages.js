@@ -424,6 +424,7 @@ export function Register() {
                 method: 'POST',
                 body: { matric_no: form.matric_no, email: form.email }
             });
+            setForm(previous => ({ ...previous, otp: '' }));
             setNotice(result.message);
             setStep(2);
         } catch (requestError) {
@@ -442,7 +443,7 @@ export function Register() {
                 method: 'POST',
                 body: { matric_no: form.matric_no, otp: form.otp }
             });
-            setNotice(result.message);
+            setNotice('');
             setStep(3);
         } catch (requestError) {
             setError(requestError.message);
@@ -479,42 +480,16 @@ export function Register() {
         }
     }
 
-    return el('div', { className: 'registration-layout' },
-        el('section', { className: 'registration-intro' },
-            el('p', { className: 'eyebrow' }, 'STUDENT ACCOUNT ACCESS'),
-            el('h1', null, 'Claim your student account.'),
-            el('p', { className: 'lead' }, 'If your student record already exists, verify the email address on that record and complete your profile to activate your account.'),
-            el('div', { className: 'registration-steps' },
-                ...[
-                    ['01', 'Find your record', 'Enter your matriculation number and the email address already held in your student record.'],
-                    ['02', 'Verify your email', 'Enter the one-time code sent to the email address on file.'],
-                    ['03', 'Complete your profile', 'Upload a profile photograph and create your password. Your account and QR credential are then activated automatically.']
-                ].map(([number, title, text]) => el('div', { className: 'registration-step', key: number },
-                    el('span', { className: 'registration-step-number' }, number),
-                    el('div', null, el('strong', null, title), el('p', null, text))
-                ))
-            ),
-            el('div', { className: 'registration-note' },
-                h(Icon, { name: 'shield', size: 18 }),
-                el('p', null, 'This process does not create a new student record. It only activates an account for a matching, existing student record.')
-            )
-        ),
-        h(Panel, { className: 'registration-panel' },
-            el('div', { className: 'claim-progress', 'aria-label': 'Account claim progress' },
-                ...['Student record', 'Email code', 'Profile'].map((label, index) => el('div', {
-                    className: 'claim-progress-step' + (step >= index + 1 ? ' is-current' : ''),
-                    key: label
-                },
-                    el('span', null, String(index + 1).padStart(2, '0')),
-                    el('small', null, label)
-                ))
+    return el('div', { className: 'registration-layout claim-focused' },
+        h(Panel, { className: 'registration-panel claim-focused-panel' },
+            el('div', { className: 'claim-brand' },
+                el('img', { src: '/logo.svg', alt: 'StudentVerifi', width: 210, height: 49 })
             ),
             h(Problem, { message: error }),
             notice && el('p', { className: 'alert alert-info', role: 'status' }, notice),
-            step === 1 && el('form', { onSubmit: startClaim, className: 'form-stack' },
+            step === 1 && el('form', { key: 1, onSubmit: startClaim, className: 'form-stack claim-stage' },
                 el('div', { className: 'auth-panel-heading' },
-                    el('p', { className: 'eyebrow' }, 'STEP 1 OF 3'),
-                    el('h2', null, 'Find your student record'),
+                    el('h1', null, 'Claim your student account'),
                     el('p', null, 'The email address must match the one already associated with your student record.')
                 ),
                 h(Field, {
@@ -529,10 +504,9 @@ export function Register() {
                 }),
                 h(Button, { type: 'submit', busy, className: 'button-full' }, 'Send verification code')
             ),
-            step === 2 && el('form', { onSubmit: verifyCode, className: 'form-stack' },
+            step === 2 && el('form', { key: 2, onSubmit: verifyCode, className: 'form-stack claim-stage' },
                 el('div', { className: 'auth-panel-heading' },
-                    el('p', { className: 'eyebrow' }, 'STEP 2 OF 3'),
-                    el('h2', null, 'Verify your email'),
+                    el('h1', null, 'Verify your email'),
                     el('p', null, 'Enter the six-digit code sent to the email address associated with your student record. The code expires after 10 minutes.')
                 ),
                 h(Field, {
@@ -542,13 +516,12 @@ export function Register() {
                     placeholder: '000000'
                 }),
                 h(Button, { type: 'submit', busy, className: 'button-full' }, 'Verify email'),
-                h(Button, { variant: 'outline', disabled: busy, onClick: () => setStep(1) }, 'Change email or matriculation number'),
+                h(Button, { variant: 'outline', disabled: busy, onClick: () => { setNotice(''); setError(''); setStep(1); } }, 'Change email or matriculation number'),
                 h(Button, { variant: 'ghost', disabled: busy, onClick: startClaim }, 'Resend verification code')
             ),
-            step === 3 && el('form', { onSubmit: completeClaim, className: 'form-stack' },
+            step === 3 && el('form', { key: 3, onSubmit: completeClaim, className: 'form-stack claim-stage' },
                 el('div', { className: 'auth-panel-heading' },
-                    el('p', { className: 'eyebrow' }, 'STEP 3 OF 3'),
-                    el('h2', null, 'Complete your student profile'),
+                    el('h1', null, 'Complete your profile'),
                     el('p', null, 'A profile photograph is required before your account and QR credential can be activated.')
                 ),
                 el('label', { className: 'photo-upload-field' },

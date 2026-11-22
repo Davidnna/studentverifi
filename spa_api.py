@@ -664,8 +664,8 @@ def admin_student_photo(student_id):
         return err('Student not found.', 404)
     try:
         return send_private_photo_response(student['photo_blob_path'])
-    except PhotoStorageError:
-        b.app.logger.exception('Administrator profile-photo retrieval failed')
+    except PhotoStorageError as error:
+        b.app.logger.warning('Administrator profile-photo retrieval failed: %s', error.reason)
         return err('The profile photograph is temporarily unavailable.', 503)
 
 
@@ -688,8 +688,8 @@ def student_photo():
         return err('Student record not found.', 404)
     try:
         return send_private_photo_response(student['photo_blob_path'])
-    except PhotoStorageError:
-        b.app.logger.exception('Student profile-photo retrieval failed')
+    except PhotoStorageError as error:
+        b.app.logger.warning('Student profile-photo retrieval failed: %s', error.reason)
         return err('Your profile photograph is temporarily unavailable.', 503)
 
 
@@ -707,8 +707,8 @@ def update_student_photo():
     student_id = session['student_id']
     try:
         new_path = upload_private_profile_photo(student_id, image_bytes)
-    except PhotoStorageError:
-        b.app.logger.exception('Student profile-photo upload failed')
+    except PhotoStorageError as error:
+        b.app.logger.warning('Student profile-photo upload failed: %s', error.reason)
         return err('Profile-photo storage is temporarily unavailable. Please try again.', 503)
 
     old_path = None
@@ -997,8 +997,8 @@ def complete_student_claim():
 
     try:
         photo_path = upload_private_profile_photo(student_id, image_bytes)
-    except PhotoStorageError:
-        b.app.logger.exception('Student claim photo upload failed')
+    except PhotoStorageError as error:
+        b.app.logger.warning('Student claim photo upload failed: %s', error.reason)
         return err('Secure photo storage is not configured or is temporarily unavailable.', 503)
 
     try:
@@ -1271,8 +1271,8 @@ def verifier_student_photo(student_id):
         return err('Student not found.', 404)
     try:
         return send_private_photo_response(student['photo_blob_path'])
-    except PhotoStorageError:
-        b.app.logger.exception('Verifier profile-photo retrieval failed')
+    except PhotoStorageError as error:
+        b.app.logger.warning('Verifier profile-photo retrieval failed: %s', error.reason)
         return err('The profile photograph is temporarily unavailable.', 503)
 
 
@@ -1328,7 +1328,10 @@ def public_verify_credential():
                 'photo_data': photo_data,
             }
         return ok(outcome=outcome, message=messages[outcome], student=public_record)
-    except (PhotoStorageError, SQLAlchemyError):
+    except PhotoStorageError as error:
+        b.app.logger.warning('Public credential photo retrieval failed: %s', error.reason)
+        return err('Public verification is temporarily unavailable.', 503)
+    except SQLAlchemyError:
         b.app.logger.exception('Public credential verification failed')
         return err('Public verification is temporarily unavailable.', 503)
 

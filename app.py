@@ -74,7 +74,7 @@ def apply_security_headers(response):
         "object-src 'none'",
         f"script-src 'self' https://unpkg.com 'nonce-{nonce}'",
         "style-src 'self' 'unsafe-inline'",
-        "img-src 'self' data: https:",
+        "img-src 'self' data: blob: https:",
         "font-src 'self' data:",
         "connect-src 'self'",
         "worker-src 'self' blob:",

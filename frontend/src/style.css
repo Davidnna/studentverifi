@@ -1675,3 +1675,12 @@ textarea:focus-visible, summary:focus-visible {
     .page-transition { animation: none; }
     .scroll-to-top { transition: none; }
 }
+
+/* Focused account claiming: reveal the current task only. */
+.registration-layout.claim-focused { display: block; max-width: 488px; margin: clamp(1.25rem, 5vw, 4rem) auto; }
+.claim-focused-panel { padding: clamp(1.25rem, 4vw, 2.25rem); }
+.claim-brand { display: flex; justify-content: center; padding-bottom: 1.25rem; margin-bottom: 1.25rem; border-bottom: 1px solid #e1e8f0; }
+.claim-brand img { width: 210px; max-width: 100%; height: auto; }
+.claim-stage .auth-panel-heading h1 { font-size: clamp(1.65rem, 4vw, 2rem); line-height: 1.2; margin: 0 0 .6rem; }
+@media (prefers-reduced-motion: no-preference) { .claim-stage { animation: claim-reveal .18s ease-out both; } }
+@keyframes claim-reveal { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }

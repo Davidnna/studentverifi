@@ -1,4 +1,4 @@
-# StudentVerifi 3.1.1
+# StudentVerifi 3.1.2
 
 StudentVerifi is a web-based student-record and QR-assisted identity-verification application developed as an academic software prototype for Ebonyi State University (EBSU). It uses a React and React Router interface, a Flask JSON API, and PostgreSQL (including Neon PostgreSQL). It is not an official EBSU service unless the university formally authorises and adopts it.
 
@@ -98,11 +98,24 @@ The server sends HTML messages to `POST /v3/domains/{domain_name}/messages/send`
 4. Connect the store to the StudentVerifi project and select the environments that need access.
 5. Vercel supplies `BLOB_READ_WRITE_TOKEN` to the connected project. Confirm that it is present for Production and Preview as required. Do not expose it to the browser or commit it.
 
-The application reads and writes photographs through authenticated server-side Blob SDK operations. Do not change the store to Public: student photographs are personal information.
+The application reads and writes photographs through authenticated server-side Blob SDK operations. Release 3.1.2 explicitly passes the store token to SDK operations and does not depend on the client supporting async context management. Upload failures are logged using safe diagnostic codes rather than provider response bodies. In Vercel Logs, filter for `Student claim photo upload failed` or `Photo storage operation=upload`:
+
+- `missing_blob_token`: check that the read/write token is present in the exact deployment environment, and redeploy after changing it.
+- `blob_access_denied`: check the token belongs to the connected Private store and has write access.
+- `blob_sdk_incompatible`: inspect the installed SDK version and its method signatures.
+- `blob_timeout`, `blob_store_unavailable`, `blob_provider_error` or `blob_invalid_response`: check store availability and the provider request's status. Do not share secrets or raw provider exception messages.
+
+The student-facing error remains generic. If a claim expires while troubleshooting, restart the claim and request a new code. No account or QR is created until the photograph has been stored and account activation completes.
+
+ Do not change the store to Public: student photographs are personal information.
 
 ### Application URL
 
 Set `APP_BASE_URL` to the public origin used by the deployment, for example `https://studentverifi.example`. It must be an origin only, with no path, query or trailing application route. This origin is embedded in QR credentials and verifier invitations. If left unset, the application uses the current request origin. For Preview deployments, use the Preview origin in the Preview environment or leave it unset so the current deployment origin is used.
+
+The two currently implemented transactional messages (student OTP and verifier invitation) share a branded, mobile-friendly HTML email template. The public PNG branding asset is published as `/email-logo.png`. Set `APP_BASE_URL` to a publicly accessible HTTPS origin for the logo to render in email clients, including a public preview if testing there. Clients may block remote images, in which case the alternative brand text remains visible. Never use a private student photo as the email logo.
+
+Registration uses progressive disclosure: the form displays only the current action, with no advance roadmap or step count. All claim verification and mandatory-photo requirements remain enforced server-side.
 
 `INSTITUTION_NAME` controls the institution label displayed on the public verification result. Its default is `Ebonyi State University`. Only use an institution's name and logo in an official capacity with appropriate permission.
 

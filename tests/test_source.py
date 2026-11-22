@@ -259,6 +259,19 @@ class SourceContractTests(unittest.TestCase):
         self.assertIn("npm run test:render", json.loads(self.text("package.json"))["scripts"]["check"])
         self.assertIn('"studentverifi-v3*"', self.text(".github/workflows/verify.yml"))
 
+    def test_claim_interface_reveals_only_current_action(self):
+        pages = self.text("frontend/src/pages.js")
+        claim = pages[pages.index("export function Register()"):pages.index("export function Dashboard()")]
+        self.assertNotIn("registration-steps", claim)
+        self.assertNotIn("claim-progress", claim)
+        self.assertNotIn("OF 3", claim)
+        for step in (1, 2, 3):
+            self.assertIn(f"step === {step}", claim)
+        self.assertIn("claim-focused", claim)
+        self.assertTrue((ROOT / "frontend/public/email-logo.png").is_file())
+        self.assertIn("public/email-logo.png", self.text(".github/workflows/verify.yml"))
+        self.assertIn("img-src 'self' data: blob: https:", self.text("vercel.json"))
+
     def test_no_public_authorisation_details(self):
         api = self.text("spa_api.py")
         self.assertIn("return err('Please sign in to continue.', 401)", api)
