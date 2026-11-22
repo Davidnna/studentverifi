@@ -1,7 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { h, AuthProvider, AppShell, Protected } from './components.js';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { h, AuthProvider, AppShell, Protected, PageErrorBoundary } from './components.js';
 import {
     Home,
     InfoPage,
@@ -29,11 +29,16 @@ import './style.css';
 const route = (path, element) => h(Route, { key: path, path, element });
 const info = (page) => route(page, h(InfoPage, { page: '/' + page }));
 
+function ShellWithRecovery() {
+    const location = useLocation();
+    return h(PageErrorBoundary, { resetKey: location.pathname, fallbackTo: '/' }, h(AppShell));
+}
+
 function App() {
     return h(BrowserRouter, null,
         h(AuthProvider, null,
             h(Routes, null,
-                h(Route, { path: '/', element: h(AppShell) },
+                h(Route, { path: '/', element: h(ShellWithRecovery) },
                     route('', h(Home)),
                     info('how-it-works'),
                     info('about'),

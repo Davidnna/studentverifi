@@ -247,6 +247,18 @@ class SourceContractTests(unittest.TestCase):
         self.assertIn("@media (prefers-reduced-motion: reduce)", css)
         self.assertIn(".scroll-to-top:focus-visible", css)
 
+    def test_shell_uses_defined_element_factory_and_recovery(self):
+        ui = self.text("frontend/src/components.js")
+        main = self.text("frontend/src/main.js")
+        self.assertNotRegex(ui, r"\bel\s*\(")
+        self.assertEqual(ui.count("h('div', { className: 'page-transition' }"), 2)
+        self.assertIn("h(PageErrorBoundary, { resetKey: location.pathname", main)
+        self.assertIn("controller.abort();", ui)
+        self.assertIn("}, 15000);", ui)
+        self.assertIn("Opening the application", self.text("frontend/index.html"))
+        self.assertIn("npm run test:render", json.loads(self.text("package.json"))["scripts"]["check"])
+        self.assertIn('"studentverifi-v3*"', self.text(".github/workflows/verify.yml"))
+
     def test_no_public_authorisation_details(self):
         api = self.text("spa_api.py")
         self.assertIn("return err('Please sign in to continue.', 401)", api)

@@ -5,7 +5,7 @@ on:
         branches:
             - main
             - master
-            - studentverifi-v3
+            - "studentverifi-v3*"
 
 # Write access is used only for the follow-up commit containing compiled React assets.
 permissions:

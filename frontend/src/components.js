@@ -14,6 +14,7 @@ const iconPaths = {
     audit: ['M4 4h16v16H4z', 'M8 8h8', 'M8 12h8', 'M8 16h5'],
     shield: ['M12 3 4 6v5c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6z', 'm8.5 12 2.2 2.2 4.8-5'],
     arrow: ['M5 12h14', 'm13 6 6 6-6 6'],
+    'arrow-up': ['M12 19V5', 'm5 12 7-7 7 7'],
     menu: ['M4 6h16', 'M4 12h16', 'M4 18h16'],
     close: ['m6 6 12 12', 'M18 6 6 18'],
     logout: ['M10 17l5-5-5-5', 'M15 12H3', 'M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7'],
@@ -61,6 +62,11 @@ export function AuthProvider({ children }) {
 
     useEffect(() => {
         const controller = new AbortController();
+        const timeout = window.setTimeout(() => {
+            controller.abort();
+            setError('Your session could not be checked. Please refresh the page to try again.');
+            setLoading(false);
+        }, 15000);
         api('/session', { signal: controller.signal })
             .then((data) => {
                 setUser(data.user);
@@ -73,12 +79,16 @@ export function AuthProvider({ children }) {
                 }
             })
             .finally(() => {
+                window.clearTimeout(timeout);
                 if (!controller.signal.aborted) {
                     setLoading(false);
                 }
             });
 
-        return () => controller.abort();
+        return () => {
+            window.clearTimeout(timeout);
+            controller.abort();
+        };
     }, []);
 
     const value = {
@@ -231,6 +241,12 @@ export class PageErrorBoundary extends React.Component {
         console.error('StudentVerifi page rendering failed.', error, info);
     }
 
+    componentDidUpdate(previousProps) {
+        if (this.state.hasError && previousProps.resetKey !== this.props.resetKey) {
+            this.setState({ hasError: false });
+        }
+    }
+
     render() {
         if (this.state.hasError) {
             return h('section', { className: 'panel page-error-boundary', role: 'alert' },
@@ -238,7 +254,8 @@ export class PageErrorBoundary extends React.Component {
                 h('h1', null, 'This page could not be displayed'),
                 h('p', null, 'An unexpected display error occurred. Check the relevant activity history before repeating any action that may have been submitted.'),
                 h('div', { className: 'actions' },
-                    h(Link, { to: this.props.fallbackTo || '/', className: 'button button-primary' }, 'Return to overview')
+                    h(Button, { onClick: () => this.setState({ hasError: false }) }, 'Try again'),
+                    h(Link, { to: this.props.fallbackTo || '/', className: 'button button-outline' }, 'Return to overview')
                 )
             );
         }
@@ -442,7 +459,7 @@ function ScrollToTopButton() {
 }
 
 
-function PublicShell() {
+export function PublicShell() {
     const { user, loading, error } = useAuth();
     const [menuOpen, setMenuOpen] = useState(false);
     const location = useLocation();
@@ -499,7 +516,7 @@ function PublicShell() {
         ),
         h('main', { id: 'public-main', className: 'public-main', tabIndex: -1 },
             error && h(Problem, { message: error }),
-            h(PageErrorBoundary, { key: location.pathname, fallbackTo: '/' }, el('div', { className: 'page-transition' }, h(Outlet)))
+            h(PageErrorBoundary, { key: location.pathname, fallbackTo: '/' }, h('div', { className: 'page-transition' }, h(Outlet)))
         ),
         h('footer', { className: 'public-footer' },
             h('div', { className: 'public-footer-inner' },
@@ -542,7 +559,7 @@ function SidebarLink({ item, close }) {
     }, h(Icon, { name: icon, size: 18 }), h('span', null, label));
 }
 
-function DashboardShell() {
+export function DashboardShell() {
     const { user, error, logout, inform } = useAuth();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
@@ -690,7 +707,7 @@ function DashboardShell() {
             ),
             h('main', { id: 'workspace-main', className: 'workspace-content', tabIndex: -1 },
                 error && h(Problem, { message: error }),
-                h(PageErrorBoundary, { key: location.pathname, fallbackTo: user?.role === 'admin' ? '/dashboard' : user?.role === 'verifier' ? '/verify' : '/student/account' }, el('div', { className: 'page-transition' }, h(Outlet)))
+                h(PageErrorBoundary, { key: location.pathname, fallbackTo: user?.role === 'admin' ? '/dashboard' : user?.role === 'verifier' ? '/verify' : '/student/account' }, h('div', { className: 'page-transition' }, h(Outlet)))
             ),
             h('footer', { className: 'workspace-footer' },
                 h('span', null, 'StudentVerifi · Academic prototype'),
