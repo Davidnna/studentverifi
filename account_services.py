@@ -12,7 +12,7 @@ import re
 import secrets
 import urllib.error
 import urllib.request
-from urllib.parse import quote, urlsplit
+from urllib.parse import unquote, urlsplit
 from io import BytesIO
 
 
@@ -351,17 +351,38 @@ def upload_private_profile_photo(student_id, image_bytes):
         raise _blob_error("upload", error) from None
 
 
+def _validate_private_blob_url(blob_url, pathname):
+    """Accept only the exact private Vercel Blob URL returned by SDK metadata."""
+    try:
+        parsed = urlsplit(str(blob_url or ""))
+        port = parsed.port
+    except ValueError as error:
+        raise PhotoStorageError("The stored photograph address is invalid.", "blob_metadata_invalid") from error
+
+    hostname = (parsed.hostname or "").lower()
+    expected_path = str(pathname or "")
+    actual_path = unquote(parsed.path.lstrip("/"))
+    if (
+        parsed.scheme != "https"
+        or not hostname.endswith(".private.blob.vercel-storage.com")
+        or hostname == ".private.blob.vercel-storage.com"
+        or parsed.username
+        or parsed.password
+        or port not in (None, 443)
+        or parsed.query
+        or parsed.fragment
+        or actual_path != expected_path
+    ):
+        raise PhotoStorageError("The stored photograph address is invalid.", "blob_metadata_invalid")
+    return str(blob_url)
+
+
 def _private_blob_download_url(pathname, token):
-    """Build the documented private Blob delivery URL from the store token."""
-    token_prefix = "vercel_blob_rw_"
-    if not token.startswith(token_prefix):
-        raise PhotoStorageError("Private photo storage credentials are invalid.", "blob_token_format_invalid")
+    """Resolve a private Blob URL through the official SDK metadata operation.
 
-    token_remainder = token[len(token_prefix):]
-    store_id, separator, secret = token_remainder.partition("_")
-    if not separator or not secret or not re.fullmatch(r"[a-z0-9-]{1,64}", store_id):
-        raise PhotoStorageError("Private photo storage credentials are invalid.", "blob_token_format_invalid")
-
+    Do not infer the store ID from the token: Vercel may change credential
+    formats and the SDK already knows how to authenticate metadata requests.
+    """
     path = str(pathname or "")
     segments = path.split("/")
     if (
@@ -373,14 +394,41 @@ def _private_blob_download_url(pathname, token):
     ):
         raise PhotoStorageError("The requested profile photograph is unavailable.", "blob_path_invalid")
 
-    encoded_path = quote(path, safe="/-._~")
-    return f"https://{store_id}.private.blob.vercel-storage.com/{encoded_path}"
+    from vercel.blob import AsyncBlobClient
+
+    async def resolve():
+        client = AsyncBlobClient(token=token)
+        try:
+            metadata = await asyncio.wait_for(client.head(path), timeout=12)
+            if metadata is None:
+                return None
+            blob_url = getattr(metadata, "url", None)
+            if not blob_url:
+                raise PhotoStorageError(
+                    "The storage service did not return photograph metadata.",
+                    "blob_metadata_invalid",
+                )
+            return _validate_private_blob_url(blob_url, path)
+        finally:
+            await _close_blob_client(client)
+
+    try:
+        return asyncio.run(resolve())
+    except PhotoStorageError:
+        raise
+    except Exception as error:
+        raise _blob_error("metadata", error) from None
 
 
 def read_private_profile_photo(pathname):
     """Read a private photograph using Vercel's documented Bearer-token HTTP access."""
     token = _blob_token()
     url = _private_blob_download_url(pathname, token)
+    if not url:
+        logging.getLogger(__name__).warning(
+            "Photo storage operation=read reason=blob_not_found"
+        )
+        return None
     blob_request = urllib.request.Request(
         url,
         headers={

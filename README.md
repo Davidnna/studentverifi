@@ -1,4 +1,4 @@
-# StudentVerifi 3.1.6
+# StudentVerifi 3.1.7
 
 StudentVerifi is a web-based student-record and QR-assisted identity-verification application developed as an academic software prototype for Ebonyi State University (EBSU). It uses a React and React Router interface, a Flask JSON API, and PostgreSQL (including Neon PostgreSQL). It is not an official EBSU service unless the university formally authorises and adopts it.
 
@@ -98,7 +98,7 @@ The server sends HTML messages to `POST /v3/domains/{domain_name}/messages/send`
 4. Connect the store to the StudentVerifi project and select the environments that need access.
 5. Vercel supplies `BLOB_READ_WRITE_TOKEN` to the connected project. Confirm that it is present for Production and Preview as required. Do not expose it to the browser or commit it.
 
-The application uploads and deletes photographs through the authenticated Vercel Blob SDK. Private photograph reads use Vercel’s documented direct HTTPS delivery endpoint with the store read/write token in the server-side `Authorization: Bearer` header. The endpoint validates the stored student-profile path, enforces JPEG content type and size limits, and never exposes the token to the browser. Release 3.1.6 uses the official `vercel==0.5.7` Python SDK for private uploads and deletions. The client is explicitly authenticated and closed. Private reads use the documented HTTPS Bearer-token endpoint rather than the SDK response stream, while the store remains private. The existing GitHub Actions test suite checks the installed SDK upload/delete contract and the authenticated HTTP retrieval contract without contacting the live store. These tests do not verify a live upload or download. Upload failures are logged using safe diagnostic codes rather than provider response bodies. In Vercel Logs, filter for `Student claim photo upload failed` or `Photo storage operation=upload`:
+The application uploads and deletes photographs through the authenticated Vercel Blob SDK. Private photograph reads use Vercel’s documented direct HTTPS delivery endpoint with the store read/write token in the server-side `Authorization: Bearer` header. The endpoint validates the stored student-profile path, enforces JPEG content type and size limits, and never exposes the token to the browser. Release 3.1.7 uses the official `vercel==0.5.7` Python SDK for private uploads, metadata lookup and deletions. Private photo reads first resolve the exact Blob URL through the SDK `head()` metadata method, validate that it belongs to the expected private Vercel Blob domain and matches the stored student path, then download it with the server-side Bearer token. The application does not parse or infer the store ID from the token, so credential-format changes cannot cause false rejection. The store remains private. The existing GitHub Actions test suite checks the installed SDK upload/delete contract and the authenticated HTTP retrieval contract without contacting the live store. These tests do not verify a live upload or download. Upload failures are logged using safe diagnostic codes rather than provider response bodies. In Vercel Logs, filter for `Student claim photo upload failed` or `Photo storage operation=upload`:
 
 - `missing_blob_token`: check that the read/write token is present in the exact deployment environment, and redeploy after changing it.
 - `blob_access_denied`: check the token belongs to the connected Private store and has write access.
@@ -225,3 +225,13 @@ Private photo reads no longer depend on the Python SDK response-stream object. T
 ## Release 3.1.5 — preserve route-specific private-photo cache headers
 
 The global security-header hook now supplies its default `Cache-Control` policy only when a route has not already set one. This preserves the authenticated profile-photo endpoint's explicit `private, no-store, max-age=0` policy instead of overwriting it with the application-wide default. The existing runtime regression test checks the exact header returned by the authenticated student-photo route.
+
+
+## Release 3.1.7 — resolve private photo URLs through SDK metadata
+
+Removed brittle parsing of `BLOB_READ_WRITE_TOKEN`. The application now uses `AsyncBlobClient.head(pathname)` to obtain the actual private Blob URL, validates its HTTPS origin and exact stored pathname, then downloads the bytes with the server-side Bearer token. This avoids assumptions about token formatting while keeping credentials out of the browser. Added tests for opaque SDK-accepted tokens, URL validation, path mismatch, missing metadata and the installed SDK `head()` contract.
+
+
+## Release 3.1.7 — resolve private photo URLs through SDK metadata
+
+Removed brittle parsing of `BLOB_READ_WRITE_TOKEN`. The application now uses `AsyncBlobClient.head(pathname)` to obtain the actual private Blob URL, validates its HTTPS origin and exact stored pathname, then downloads the bytes with the server-side Bearer token. This avoids assumptions about token formatting while keeping credentials out of the browser. Added tests for opaque SDK-accepted tokens, URL validation, path mismatch, missing metadata and the installed SDK `head()` contract.

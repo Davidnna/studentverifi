@@ -272,13 +272,17 @@ class SourceContractTests(unittest.TestCase):
         self.assertIn("public/email-logo.png", self.text(".github/workflows/verify.yml"))
         self.assertIn("img-src 'self' data: blob: https:", self.text("vercel.json"))
 
-    def test_private_blob_photo_reads_use_authenticated_http_not_sdk_stream(self):
+    def test_private_blob_photo_reads_resolve_url_from_sdk_metadata(self):
         services = self.text("account_services.py")
         self.assertIn("def _private_blob_download_url", services)
+        self.assertIn("client.head(path)", services)
+        self.assertIn("_validate_private_blob_url(blob_url, path)", services)
         self.assertIn("Authorization", services)
         self.assertIn("Bearer {token}", services)
         self.assertIn(".private.blob.vercel-storage.com", services)
         self.assertIn("response.read(MAX_PROFILE_PHOTO_BYTES + 1)", services)
+        self.assertNotIn("blob_token_format_invalid", services)
+        self.assertNotIn("token_remainder.partition", services)
         self.assertNotIn('client.get(str(pathname), access="private")', services)
 
     def test_no_public_authorisation_details(self):

@@ -19,6 +19,7 @@ class FakeBlobClient:
     uploaded_path = None
     deleted_paths = None
     stored_bytes = b"student-photo-bytes"
+    head_url = "https://twrnsww5pe4g7xyp.private.blob.vercel-storage.com/student-profiles/17/photo.jpg"
 
     def __init__(self, *, token):
         self.__class__.client_token = token
@@ -32,13 +33,11 @@ class FakeBlobClient:
         self.__class__.stored_bytes = body
         return SimpleNamespace(pathname=pathname)
 
-    async def get(self, pathname, *, access):
-        self.__class__.get_options = dict(access=access)
-
-        async def stream():
-            yield self.__class__.stored_bytes
-
-        return SimpleNamespace(status_code=200, stream=stream())
+    async def head(self, pathname):
+        self.__class__.head_path = pathname
+        if self.__class__.head_url is None:
+            return None
+        return SimpleNamespace(url=self.__class__.head_url)
 
     async def delete(self, paths):
         self.__class__.deleted_paths = paths
@@ -53,6 +52,8 @@ class PrivateBlobTests(unittest.TestCase):
         FakeBlobClient.uploaded_path = None
         FakeBlobClient.deleted_paths = None
         FakeBlobClient.stored_bytes = b"student-photo-bytes"
+        FakeBlobClient.head_url = "https://twrnsww5pe4g7xyp.private.blob.vercel-storage.com/student-profiles/17/photo.jpg"
+        FakeBlobClient.head_path = None
         self.blob_module = types.ModuleType("vercel.blob")
         self.blob_module.AsyncBlobClient = FakeBlobClient
         self.vercel_module = types.ModuleType("vercel")
@@ -91,17 +92,22 @@ class PrivateBlobTests(unittest.TestCase):
                 self.limit = limit
                 return image
 
-        with patch("account_services.urllib.request.urlopen", return_value=Response()) as download:
-            result = read_private_profile_photo("student-profiles/17/photo.jpg")
+        # A nonstandard but SDK-accepted token must not be rejected by our own parser.
+        with patch.dict(os.environ, {"BLOB_READ_WRITE_TOKEN": "opaque-sdk-credential"}):
+            with patch("account_services.urllib.request.urlopen", return_value=Response()) as download:
+                result = read_private_profile_photo("student-profiles/17/photo.jpg")
 
         self.assertEqual(result, image)
+        self.assertEqual(FakeBlobClient.head_path, "student-profiles/17/photo.jpg")
+        self.assertEqual(FakeBlobClient.client_token, "opaque-sdk-credential")
+        self.assertTrue(FakeBlobClient.closed)
         request = download.call_args.args[0]
         self.assertEqual(
             request.full_url,
             "https://twrnsww5pe4g7xyp.private.blob.vercel-storage.com/student-profiles/17/photo.jpg",
         )
         self.assertEqual(request.get_header("Authorization"),
-                         "Bearer vercel_blob_rw_twrnsww5pe4g7xyp_test-secret")
+                         "Bearer opaque-sdk-credential")
         self.assertEqual(request.get_header("Accept"), "image/jpeg")
         self.assertEqual(download.call_args.kwargs["timeout"], 15)
 
@@ -143,11 +149,36 @@ class PrivateBlobTests(unittest.TestCase):
                 read_private_profile_photo("student-profiles/17/photo.jpg")
         self.assertEqual(caught.exception.reason, "blob_invalid_response")
 
-    def test_private_photo_retrieval_rejects_invalid_store_token(self):
-        with patch.dict(os.environ, {"BLOB_READ_WRITE_TOKEN": "not-a-vercel-blob-token"}):
-            with self.assertRaises(PhotoStorageError) as caught:
-                read_private_profile_photo("student-profiles/17/photo.jpg")
-        self.assertEqual(caught.exception.reason, "blob_token_format_invalid")
+    def test_private_photo_retrieval_does_not_parse_token_format(self):
+        with patch.dict(os.environ, {"BLOB_READ_WRITE_TOKEN": "opaque-sdk-credential"}):
+            with patch("account_services.urllib.request.urlopen") as download:
+                class Response:
+                    status = 200
+                    headers = {"Content-Type": "image/jpeg"}
+                    def __enter__(self): return self
+                    def __exit__(self, *args): return False
+                    def read(self, limit): return b"\xff\xd8\xffphoto"
+                download.return_value = Response()
+                image = read_private_profile_photo("student-profiles/17/photo.jpg")
+        self.assertTrue(image.startswith(b"\xff\xd8\xff"))
+
+    def test_private_photo_retrieval_rejects_untrusted_metadata_url(self):
+        FakeBlobClient.head_url = "https://attacker.example/student-profiles/17/photo.jpg"
+        with self.assertRaises(PhotoStorageError) as caught:
+            read_private_profile_photo("student-profiles/17/photo.jpg")
+        self.assertEqual(caught.exception.reason, "blob_metadata_invalid")
+
+    def test_private_photo_retrieval_rejects_metadata_path_mismatch(self):
+        FakeBlobClient.head_url = "https://twrnsww5pe4g7xyp.private.blob.vercel-storage.com/student-profiles/18/photo.jpg"
+        with self.assertRaises(PhotoStorageError) as caught:
+            read_private_profile_photo("student-profiles/17/photo.jpg")
+        self.assertEqual(caught.exception.reason, "blob_metadata_invalid")
+
+    def test_private_photo_retrieval_handles_missing_metadata(self):
+        FakeBlobClient.head_url = None
+        with patch("account_services.urllib.request.urlopen") as download:
+            self.assertIsNone(read_private_profile_photo("student-profiles/17/photo.jpg"))
+        download.assert_not_called()
 
     def test_delete_only_accepts_student_profile_paths(self):
         delete_private_profile_photo("student-profiles/17/photo.jpg")
