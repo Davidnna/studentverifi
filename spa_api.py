@@ -440,7 +440,7 @@ def catalogue():
 @api.get('/students')
 @protected('admin')
 def students():
-    page = safe_page()
+    page = min(max(request.args.get('page', 1, type=int), 1), 100_000)
     q = request.args.get('q', '').strip()[:100]
     status = request.args.get('status', '').strip()
     if status and status not in ('Active', 'Inactive'):

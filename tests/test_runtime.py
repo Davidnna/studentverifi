@@ -119,6 +119,40 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(dashboard.json["weekly_verifications"][-1]["total"], 3)
 
 
+    def test_student_search_normalises_pagination(self):
+        user = {"id": 15, "username": "admin", "role": "admin", "student_id": None}
+        sample_student = {"id": 6, "first_name": "Test", "last_name": "Student"}
+
+        class StudentSearchDatabase(FakeDatabase):
+            def __init__(self):
+                super().__init__(user)
+                self.list_params = None
+
+            def execute(self, statement, params=()):
+                if statement.startswith("SELECT * FROM student_profiles"):
+                    self.list_params = params
+                    return Result([sample_student])
+                if statement.startswith("SELECT COUNT(*) FROM student_profiles"):
+                    return Result([(1,)])
+                return super().execute(statement, params)
+
+        db = StudentSearchDatabase()
+        with self.client.session_transaction() as session:
+            session.update(user_id=15, username="admin", role="admin")
+        with patch.object(app, "get_db", return_value=db), \
+             patch.object(app, "ensure_security_migrations"):
+            for supplied, expected in ((None, 1), ("2", 2), ("bad", 1), ("0", 1), ("-5", 1), ("9" * 30, 100_000)):
+                with self.subTest(page=supplied):
+                    query = {"q": "Test"}
+                    if supplied is not None:
+                        query["page"] = supplied
+                    response = self.client.get("/api/students", query_string=query)
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.json["page"], expected)
+                    self.assertEqual(response.json["total"], 1)
+                    self.assertEqual(response.json["items"][0]["name"], "Test Student")
+                    self.assertEqual(db.list_params, ("%Test%",) * 4 + (20, (expected - 1) * 20))
+
     def test_registration_requests_returns_pending_and_decided_history(self):
         user = {"id": 15, "username": "admin", "role": "admin", "student_id": None}
         requests = [
